@@ -180,7 +180,15 @@ public class EmailService {
             Integer currentOrder,
             String reason) throws MessagingException {
 
+        System.out.println("📧 [EmailService] 開始準備狀態變更郵件:");
+        System.out.println("  收件人: " + toEmail);
+        System.out.println("  狀態: " + newStatus);
+        System.out.println("  申請人: " + applicantName);
+        System.out.println("  幼兒: " + childName);
+
         String subject = "【托育申請審核通知】" + getStatusDisplay(newStatus);
+        System.out.println("  郵件主旨: " + subject);
+
         String htmlContent = buildApplicationStatusChangeEmail(
                 applicantName,
                 childName,
@@ -191,6 +199,8 @@ public class EmailService {
                 currentOrder,
                 reason
         );
+
+        System.out.println("  HTML 內容已生成，長度: " + htmlContent.length() + " 字元");
 
         sendHtmlEmail(toEmail, subject, htmlContent);
         System.out.println("✅ 審核狀態變更通知郵件已發送給: " + toEmail + " (狀態: " + newStatus + ")");

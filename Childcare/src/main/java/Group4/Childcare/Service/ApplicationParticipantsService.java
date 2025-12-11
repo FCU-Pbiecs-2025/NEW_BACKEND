@@ -2,6 +2,7 @@ package Group4.Childcare.Service;
 
 import Group4.Childcare.Model.ApplicationParticipants;
 import Group4.Childcare.Repository.ApplicationParticipantsJdbcRepository;
+import Group4.Childcare.Repository.ApplicationsJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +16,12 @@ public class ApplicationParticipantsService {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ApplicationsJdbcRepository applicationsJdbcRepository;
+
+    @Autowired(required = false)
+    private EmailService emailService;
 
     @Autowired
     public ApplicationParticipantsService(ApplicationParticipantsJdbcRepository repository) {
@@ -216,9 +223,87 @@ public class ApplicationParticipantsService {
         // 查詢並返回更新後的參與者
         List<ApplicationParticipants> participants = repository.findByApplicationIDAndNationalID(applicationID, nationalID);
         if (!participants.isEmpty()) {
-            return participants.get(0);
+            ApplicationParticipants updatedParticipant = participants.get(0);
+
+            // 🔔 發送郵件通知
+            sendStatusChangeEmail(applicationID, nationalID, status, reason, currentOrder);
+
+            return updatedParticipant;
         } else {
             throw new RuntimeException("Participant not found after update: ApplicationID=" + applicationID + ", NationalID=" + nationalID);
+        }
+    }
+
+    /**
+     * 發送狀態變更郵件通知
+     */
+    private void sendStatusChangeEmail(UUID applicationID, String nationalID, String status, String reason, Integer currentOrder) {
+        if (emailService == null) {
+            System.out.println("⚠️ [sendStatusChangeEmail] EmailService 未配置，跳過郵件發送");
+            return;
+        }
+
+        try {
+            System.out.println("🔔 [sendStatusChangeEmail] 準備發送郵件:");
+            System.out.println("  ApplicationID: " + applicationID);
+            System.out.println("  NationalID: " + nationalID);
+            System.out.println("  狀態: " + status);
+
+            // 1. 從 users 表查詢申請人郵件
+            Optional<String> emailOpt = applicationsJdbcRepository.getUserEmailByApplicationId(applicationID);
+            if (emailOpt.isEmpty() || emailOpt.get().isEmpty()) {
+                System.err.println("❌ 無法找到申請人郵件地址: applicationId=" + applicationID);
+                return;
+            }
+            String applicantEmail = emailOpt.get();
+            System.out.println("  收件人: " + applicantEmail);
+
+            // 2. 查詢案件相關資訊
+            String querySql =
+                "SELECT " +
+                "  u.Name AS ApplicantName, " +
+                "  ap.Name AS ChildName, " +
+                "  i.InstitutionName, " +
+                "  a.CaseNumber, " +
+                "  a.ApplicationDate " +
+                "FROM application_participants ap " +
+                "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
+                "LEFT JOIN users u ON a.UserID = u.UserID " +
+                "LEFT JOIN institutions i ON a.InstitutionID = i.InstitutionID " +
+                "WHERE ap.ApplicationID = ? AND ap.NationalID = ?";
+
+            java.util.Map<String, Object> caseInfo = jdbcTemplate.queryForMap(querySql, applicationID.toString(), nationalID);
+
+            String applicantName = (String) caseInfo.get("ApplicantName");
+            String childName = (String) caseInfo.get("ChildName");
+            String institutionName = (String) caseInfo.get("InstitutionName");
+            Object caseNumberObj = caseInfo.get("CaseNumber");
+            Long caseNumber = caseNumberObj != null ? ((Number) caseNumberObj).longValue() : null;
+            Object appDateObj = caseInfo.get("ApplicationDate");
+            String applicationDate = appDateObj != null ? appDateObj.toString() : "";
+
+            System.out.println("  申請人: " + applicantName);
+            System.out.println("  幼兒: " + childName);
+            System.out.println("  機構: " + institutionName);
+
+            // 3. 發送郵件
+            emailService.sendApplicationStatusChangeEmail(
+                    applicantEmail,
+                    applicantName != null ? applicantName : "",
+                    childName != null ? childName : "",
+                    institutionName != null ? institutionName : "",
+                    caseNumber,
+                    applicationDate,
+                    status,
+                    currentOrder,
+                    reason
+            );
+
+            System.out.println("✅ [sendStatusChangeEmail] 郵件發送成功: " + applicantEmail + " (狀態: " + status + ")");
+
+        } catch (Exception e) {
+            System.err.println("❌ [sendStatusChangeEmail] 郵件發送失敗: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

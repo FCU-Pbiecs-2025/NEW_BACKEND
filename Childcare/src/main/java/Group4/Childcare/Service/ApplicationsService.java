@@ -219,19 +219,30 @@ public class ApplicationsService {
       String applicationDate = caseDto.applicationDate != null ? caseDto.applicationDate.toString() : "";
 
       // 6. 發送郵件（如果 emailService 可用）
+      System.out.println("🔔 準備發送郵件通知:");
+      System.out.println("  狀態: " + newStatus);
+      System.out.println("  收件人: " + applicantEmail);
+      System.out.println("  申請人: " + applicantName);
+      System.out.println("  幼兒: " + childName);
+
       if (emailService != null) {
-        emailService.sendApplicationStatusChangeEmail(
-                applicantEmail,
-                applicantName,
-                childName,
-                institutionName,
-                caseNumber,
-                applicationDate,
-                newStatus,
-                currentOrder,
-                reason
-        );
-        System.out.println("✅ 審核狀態變更通知郵件已發送: " + applicantEmail);
+        try {
+          emailService.sendApplicationStatusChangeEmail(
+                  applicantEmail,
+                  applicantName,
+                  childName,
+                  institutionName,
+                  caseNumber,
+                  applicationDate,
+                  newStatus,
+                  currentOrder,
+                  reason
+          );
+          System.out.println("✅ 審核狀態變更通知郵件已發送成功: " + applicantEmail + " (狀態: " + newStatus + ")");
+        } catch (Exception emailError) {
+          System.err.println("❌ 郵件發送失敗 (狀態: " + newStatus + "): " + emailError.getMessage());
+          emailError.printStackTrace();
+        }
       } else {
         System.out.println("⚠️ EmailService 未配置，郵件未發送");
         System.out.println("郵件摘要:");
@@ -245,7 +256,7 @@ public class ApplicationsService {
       }
 
     } catch (Exception e) {
-      System.err.println("❌ 發送郵件時出錯: " + e.getMessage());
+      System.err.println("❌ updateStatusAndSendEmail 整體流程出錯: " + e.getMessage());
       e.printStackTrace();
     }
   }
