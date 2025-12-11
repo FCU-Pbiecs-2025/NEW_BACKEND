@@ -839,7 +839,10 @@ public class ApplicationsController {
         }
         // reviewDate: server sets to now
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        service.updateParticipantStatusReason(id, nationalID, statusParam, reason, now);
+
+        // ✅ 新增：調用更新狀態並發送郵件的方法
+        service.updateStatusAndSendEmail(id, nationalID, statusParam, reason, now);
+
         // return updated single application DTO (filter by nationalID so children contains only that child)
         Optional<ApplicationCaseDTO> opt = service.getApplicationByIdJdbc(id, nationalID);
         return opt.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());

@@ -30,6 +30,8 @@ public class ApplicationsService {
   private ApplicationParticipantsJdbcRepository applicationParticipantsRepository;
   @Autowired
   private Group4.Childcare.Service.FileService fileService;
+  @Autowired(required = false)
+  private EmailService emailService;
 
   @Transactional
   public Applications create(Applications entity) {
@@ -158,7 +160,101 @@ public class ApplicationsService {
     applicationsJdbcRepository.updateParticipantStatusReason(id, nationalID, status, reason, reviewDate);
   }
 
-  // New: update application case (participants + review fields)
+  /**
+   * 更新審核狀態並發送通知郵件
+   * @param applicationId 案件 ID
+   * @param nationalID 幼兒身分證字號
+   * @param newStatus 新狀態
+   * @param reason 備註說明（可為 null）
+   * @param reviewDate 審核日期
+   */
+  @Transactional
+  public void updateStatusAndSendEmail(
+          UUID applicationId,
+          String nationalID,
+          String newStatus,
+          String reason,
+          java.time.LocalDateTime reviewDate) {
+
+    // 1. 更新審核狀態
+    updateParticipantStatusReason(applicationId, nationalID, newStatus, reason, reviewDate);
+
+    // 2. 查詢案件詳情以獲取發送郵件所需的信息
+    try {
+      // 2.1 從 users 表查詢申請人郵件
+      Optional<String> emailOpt = applicationsJdbcRepository.getUserEmailByApplicationId(applicationId);
+      if (emailOpt.isEmpty() || emailOpt.get() == null || emailOpt.get().isEmpty()) {
+        System.err.println("❌ 無法找到申請人郵件地址: applicationId=" + applicationId);
+        return;
+      }
+      String applicantEmail = emailOpt.get();
+
+      // 2.2 查詢案件詳情
+      Optional<ApplicationCaseDTO> caseOpt = getApplicationByIdJdbc(applicationId, nationalID);
+      if (caseOpt.isEmpty()) {
+        System.err.println("❌ 無法找到案件: " + applicationId);
+        return;
+      }
+
+      ApplicationCaseDTO caseDto = caseOpt.get();
+
+      // 3. 獲取申請人姓名（從家長列表中取得第一位）
+      String applicantName = "";
+      if (caseDto.parents != null && !caseDto.parents.isEmpty()) {
+        applicantName = caseDto.parents.get(0).name;
+      }
+
+      // 4. 獲取幼兒信息（第一個 child）
+      String childName = "";
+      Integer currentOrder = null;
+      if (caseDto.children != null && !caseDto.children.isEmpty()) {
+        ApplicationParticipantDTO child = caseDto.children.get(0);
+        childName = child.name;
+        currentOrder = child.currentOrder;
+      }
+
+      // 5. 獲取機構名稱和案件編號
+      String institutionName = caseDto.institutionName != null ? caseDto.institutionName : "";
+      Long caseNumber = caseDto.caseNumber;
+      String applicationDate = caseDto.applicationDate != null ? caseDto.applicationDate.toString() : "";
+
+      // 6. 發送郵件（如果 emailService 可用）
+      if (emailService != null) {
+        emailService.sendApplicationStatusChangeEmail(
+                applicantEmail,
+                applicantName,
+                childName,
+                institutionName,
+                caseNumber,
+                applicationDate,
+                newStatus,
+                currentOrder,
+                reason
+        );
+        System.out.println("✅ 審核狀態變更通知郵件已發送: " + applicantEmail);
+      } else {
+        System.out.println("⚠️ EmailService 未配置，郵件未發送");
+        System.out.println("郵件摘要:");
+        System.out.println("  收件人: " + applicantEmail);
+        System.out.println("  申請人: " + applicantName);
+        System.out.println("  幼兒: " + childName);
+        System.out.println("  機構: " + institutionName);
+        System.out.println("  案件編號: " + caseNumber);
+        System.out.println("  狀態: " + newStatus);
+        System.out.println("  序號: " + currentOrder);
+      }
+
+    } catch (Exception e) {
+      System.err.println("❌ 發送郵件時出錯: " + e.getMessage());
+      e.printStackTrace();
+    }
+  }
+
+  /**
+   * 更新案件資料（包含參與者信息）
+   * @param id 案件 ID
+   */
+  @Transactional
   public void updateApplicationCase(UUID id, ApplicationCaseDTO dto) {
     applicationsJdbcRepository.updateApplicationCase(id, dto);
   }
@@ -302,3 +398,4 @@ public class ApplicationsService {
   }
 
 }
+

@@ -229,6 +229,23 @@ public class ApplicationsJdbcRepository {
         }
     }
 
+    /**
+     * 根據 ApplicationID 查詢 Users 表的 Email
+     * @param applicationId 案件ID
+     * @return 使用者的 Email，如果查詢不到則返回 Optional.empty()
+     */
+    public Optional<String> getUserEmailByApplicationId(UUID applicationId) {
+        String sql = "SELECT u.Email FROM users u " +
+                     "INNER JOIN applications a ON u.UserID = a.UserID " +
+                     "WHERE a.ApplicationID = ?";
+        try {
+            String email = jdbcTemplate.queryForObject(sql, String.class, applicationId.toString());
+            return Optional.ofNullable(email);
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
     public Optional<Applications> getApplicationById(UUID id) {
         String sql = "SELECT * FROM " + TABLE_NAME + " WHERE ApplicationID = ?";
         List<Applications> result = jdbcTemplate.query(sql, APPLICATIONS_ROW_MAPPER, id.toString());
