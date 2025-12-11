@@ -221,4 +221,13 @@ public class ApplicationParticipantsService {
             throw new RuntimeException("Participant not found after update: ApplicationID=" + applicationID + ", NationalID=" + nationalID);
         }
     }
+
+    /**
+     * 計算指定 NationalID 且 ParticipantType = false (幼兒) 的總案件數
+     * @param nationalID 幼兒身分證字號
+     * @return 該幼兒的總案件數
+     */
+    public int countApplicationsByChildNationalID(String nationalID) {
+        return repository.countApplicationsByChildNationalID(nationalID);
+    }
 }

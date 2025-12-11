@@ -260,7 +260,8 @@ public class ApplicationsController {
    * 1. 接收 CaseEditUpdateDTO 格式的申請資料（JSON）
    * 2. 支持上傳最多 4 個附件檔案
    * 3. 建立案件資訊並將檔案儲存到 IdentityResource/{applicationID}/ 目錄
-   * 4. 返回建立成功的完整案件資訊
+   * 4. 驗證每個幼兒的 nationalID 總案件數不得超過 2 件
+   * 5. 返回建立成功的完整案件資訊
    *
    * RequestParam 說明：
    *  - file (可選): 第一個附件檔案
@@ -276,8 +277,14 @@ public class ApplicationsController {
    *  - children: 幼兒列表
    *  - attachmentPath, attachmentPath1, attachmentPath2, attachmentPath3: 附件路徑（由系統設定）
    *
+   * 驗證規則：
+   *  - 每個幼兒的身分證字號（nationalID）在系統中的總申請案件數不得超過 2 件
+   *  - 若超過限制，將返回 400 Bad Request 並說明錯誤訊息
+   *
    * 回傳值：
    *  - 200 OK + 完整的 CaseEditUpdateDTO（包含自動設置的 applicationID、attachmentPath 等）
+   *  - 400 Bad Request + 錯誤訊息（當幼兒申請案件數超過限制時）
+   *  - 500 Internal Server Error + 錯誤訊息（當發生系統錯誤時）
    *
    * 使用範例：
    * POST /applications/case/submit
@@ -661,6 +668,21 @@ public class ApplicationsController {
       System.out.println("🔵 Starting to save CHILDREN...");
       if (caseDto.getChildren() != null) {
         System.out.println("  Total children to save: " + caseDto.getChildren().size());
+
+        // 🔍 檢查每個幼兒的 nationalID 總案件數是否超過 2 件
+        for (ApplicationParticipantDTO childDto : caseDto.getChildren()) {
+          if (childDto.nationalID != null && !childDto.nationalID.trim().isEmpty()) {
+            int existingCount = applicationParticipantsService.countApplicationsByChildNationalID(childDto.nationalID);
+            System.out.println("  🔍 幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 目前已有 " + existingCount + " 件申請");
+
+            if (existingCount >= 2) {
+              String errorMsg = "幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 的申請案件已達上限 2 件，無法再提交新申請";
+              System.err.println("  ❌ " + errorMsg);
+              return ResponseEntity.status(400).body(errorMsg);
+            }
+          }
+        }
+
         for (ApplicationParticipantDTO childDto : caseDto.getChildren()) {
           saveParticipant.accept(childDto, false);
         }

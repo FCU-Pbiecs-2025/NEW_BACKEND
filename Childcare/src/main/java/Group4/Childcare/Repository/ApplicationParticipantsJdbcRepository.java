@@ -189,5 +189,17 @@ public class ApplicationParticipantsJdbcRepository {
         String sql = "SELECT * FROM " + TABLE_NAME + " WHERE ApplicationID = ? AND NationalID = ?";
         return jdbcTemplate.query(sql, ROW_MAPPER, applicationID.toString(), nationalID);
     }
+
+    /**
+     * 計算指定 NationalID 且 ParticipantType = false (幼兒) 的總案件數
+     * @param nationalID 幼兒身分證字號
+     * @return 該幼兒的總案件數
+     */
+    public int countApplicationsByChildNationalID(String nationalID) {
+        String sql = "SELECT COUNT(DISTINCT ApplicationID) FROM " + TABLE_NAME +
+                     " WHERE NationalID = ? AND ParticipantType = 0";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, nationalID);
+        return count != null ? count : 0;
+    }
 }
 
