@@ -97,6 +97,12 @@ public class AnnouncementsController {
         return ResponseEntity.ok(summaries);
     }
 
+    @GetMapping("/front")
+    public ResponseEntity<List<AnnouncementSummaryDTO>> getfrontSummary() {
+        List<AnnouncementSummaryDTO> summaries = service.getfrontSummaryAll();
+        return ResponseEntity.ok(summaries);
+    }
+
     // 新增：後台專用 - 取得 active announcements summaries（Type=2, Status=1, EndDate >= today）
     @GetMapping("/active/backend")
     public ResponseEntity<List<AnnouncementSummaryDTO>> getAdminActiveBackend() {

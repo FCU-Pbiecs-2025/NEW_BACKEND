@@ -198,6 +198,13 @@ public class AnnouncementsJdbcRepository {
         return jdbcTemplate.query(sql, SUMMARY_ROW_MAPPER);
     }
 
+    // Custom method: Find summary data
+    public List<AnnouncementSummaryDTO> findfrontSummaryData() {
+        String sql = "SELECT AnnouncementID, Title, Content, StartDate, AttachmentPath, Type FROM " + TABLE_NAME+
+                " WHERE Type = 1 AND Status = 1 AND StartDate <= GETDATE() AND EndDate >= GETDATE()" ;
+        return jdbcTemplate.query(sql, SUMMARY_ROW_MAPPER);
+    }
+
     // Custom method: Find with offset pagination (for SQL Server, use string concatenation for offset/limit)
     public List<Announcements> findWithOffset(int offset, int limit) {
         // 只撈前台、已上架、在有效期間的公告

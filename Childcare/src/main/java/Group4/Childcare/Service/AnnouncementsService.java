@@ -35,6 +35,10 @@ public class AnnouncementsService {
         return jdbcRepository.findSummaryData();
     }
 
+    public List<AnnouncementSummaryDTO> getfrontSummaryAll() {
+        return jdbcRepository.findfrontSummaryData();
+    }
+
     // 新增：取得後台用的 active announcements summaries（Type=2, Status=1, EndDate >= today）
     public List<AnnouncementSummaryDTO> getAdminActiveBackend() {
         return jdbcRepository.findAdminActiveBackend();

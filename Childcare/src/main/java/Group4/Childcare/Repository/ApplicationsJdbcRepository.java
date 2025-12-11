@@ -16,6 +16,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.ArrayList;
 
 @Repository
 public class ApplicationsJdbcRepository {
@@ -130,29 +131,91 @@ public class ApplicationsJdbcRepository {
     }
 
     private Applications update(Applications application) {
-        String sql = "UPDATE " + TABLE_NAME +
-                " SET ApplicationDate = ?, CaseNumber = ?, InstitutionID = ?, UserID = ?, IdentityType = ?, " +
-                "AttachmentPath = ?, AttachmentPath1 = ?, AttachmentPath2 = ?, AttachmentPath3 = ? " +
-                "WHERE ApplicationID = ?";
+        // 先從資料庫取得原始資料，避免遺失欄位
+        Optional<Applications> originalOpt = findById(application.getApplicationID());
+        if (originalOpt.isEmpty()) {
+            throw new RuntimeException("Application not found for update: " + application.getApplicationID());
+        }
+        Applications original = originalOpt.get();
+
+        // 只更新非 null 的欄位，保留原始資料中的其他欄位
+        String sql = "UPDATE " + TABLE_NAME + " SET ";
+        List<Object> params = new ArrayList<>();
+        List<String> setClauses = new ArrayList<>();
+
+        if (application.getApplicationDate() != null) {
+            setClauses.add("ApplicationDate = ?");
+            params.add(application.getApplicationDate());
+        }
+
+        if (application.getCaseNumber() != null) {
+            setClauses.add("CaseNumber = ?");
+            params.add(application.getCaseNumber());
+        }
+
+        if (application.getInstitutionID() != null) {
+            setClauses.add("InstitutionID = ?");
+            params.add(application.getInstitutionID().toString());
+        }
+
+        if (application.getUserID() != null) {
+            setClauses.add("UserID = ?");
+            params.add(application.getUserID().toString());
+        }
+
+        if (application.getIdentityType() != null) {
+            setClauses.add("IdentityType = ?");
+            params.add(application.getIdentityType());
+        }
+
+        if (application.getAttachmentPath() != null) {
+            setClauses.add("AttachmentPath = ?");
+            params.add(application.getAttachmentPath());
+        }
+
+        if (application.getAttachmentPath1() != null) {
+            setClauses.add("AttachmentPath1 = ?");
+            params.add(application.getAttachmentPath1());
+        }
+
+        if (application.getAttachmentPath2() != null) {
+            setClauses.add("AttachmentPath2 = ?");
+            params.add(application.getAttachmentPath2());
+        }
+
+        if (application.getAttachmentPath3() != null) {
+            setClauses.add("AttachmentPath3 = ?");
+            params.add(application.getAttachmentPath3());
+        }
+
+        if (setClauses.isEmpty()) {
+            System.out.println("⚠️ No fields to update for ApplicationID: " + application.getApplicationID());
+            return original; // 沒有欄位需要更新，返回原始資料
+        }
+
+        sql += String.join(", ", setClauses) + " WHERE ApplicationID = ?";
+        params.add(application.getApplicationID().toString());
 
         System.out.println("🔵 ApplicationsJdbcRepository.update() - Executing SQL:");
         System.out.println("  ApplicationID: " + application.getApplicationID());
-        System.out.println("  CaseNumber: " + application.getCaseNumber());
+        System.out.println("  SQL: " + sql);
+        System.out.println("  Params: " + params);
 
-        int rows = jdbcTemplate.update(sql,
-                application.getApplicationDate(),
-                application.getCaseNumber(),
-                application.getInstitutionID() != null ? application.getInstitutionID().toString() : null,
-                application.getUserID() != null ? application.getUserID().toString() : null,
-                application.getIdentityType(),
-                application.getAttachmentPath(),
-                application.getAttachmentPath1(),
-                application.getAttachmentPath2(),
-                application.getAttachmentPath3(),
-                application.getApplicationID().toString()
-        );
+        int rows = jdbcTemplate.update(sql, params.toArray());
 
         System.out.println("✅ UPDATE completed! Rows affected: " + rows);
+
+        // 返回更新後的資料（合併原始資料和更新內容）
+        if (application.getApplicationDate() == null) application.setApplicationDate(original.getApplicationDate());
+        if (application.getCaseNumber() == null) application.setCaseNumber(original.getCaseNumber());
+        if (application.getInstitutionID() == null) application.setInstitutionID(original.getInstitutionID());
+        if (application.getUserID() == null) application.setUserID(original.getUserID());
+        if (application.getIdentityType() == null) application.setIdentityType(original.getIdentityType());
+        if (application.getAttachmentPath() == null) application.setAttachmentPath(original.getAttachmentPath());
+        if (application.getAttachmentPath1() == null) application.setAttachmentPath1(original.getAttachmentPath1());
+        if (application.getAttachmentPath2() == null) application.setAttachmentPath2(original.getAttachmentPath2());
+        if (application.getAttachmentPath3() == null) application.setAttachmentPath3(original.getAttachmentPath3());
+
         return application;
     }
 
