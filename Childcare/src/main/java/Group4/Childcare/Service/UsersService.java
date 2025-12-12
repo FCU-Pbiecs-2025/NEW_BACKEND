@@ -143,4 +143,43 @@ public class UsersService {
       throw new RuntimeException("Failed to update user profile: " + e.getMessage(), e);
     }
   }
+
+  /**
+   * 模糊查詢使用者，支援分頁
+   * @param searchTerm 搜尋關鍵字（會搜尋帳號、姓名、信箱、機構名稱）
+   * @param offset 起始位置
+   * @param size 分頁大小
+   * @return 符合條件的使用者列表
+   */
+  public List<UserSummaryDTO> searchUsersWithOffset(String searchTerm, int offset, int size) {
+    try {
+      if (searchTerm == null || searchTerm.trim().isEmpty()) {
+        // 如果搜尋關鍵字為空，返回一般分頁結果
+        return getUsersWithOffsetAndInstitutionNameJdbc(offset, size);
+      }
+      return repository.searchUsersWithOffset(searchTerm.trim(), offset, size);
+    } catch (Exception e) {
+      System.err.println("Error in searchUsersWithOffset: " + e.getMessage());
+      e.printStackTrace();
+      throw new RuntimeException("Failed to search users with offset", e);
+    }
+  }
+
+  /**
+   * 計算模糊查詢的總筆數
+   * @param searchTerm 搜尋關鍵字
+   * @return 符合條件的總筆數
+   */
+  public long getSearchCount(String searchTerm) {
+    try {
+      if (searchTerm == null || searchTerm.trim().isEmpty()) {
+        return getTotalCount();
+      }
+      return repository.countSearchUsers(searchTerm.trim());
+    } catch (Exception e) {
+      System.err.println("Error in getSearchCount: " + e.getMessage());
+      e.printStackTrace();
+      return 0;
+    }
+  }
 }

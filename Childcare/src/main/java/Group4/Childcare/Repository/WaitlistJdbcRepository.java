@@ -21,8 +21,9 @@ public class WaitlistJdbcRepository {
     }
 
     public List<Map<String, Object>> findWaitlistByInstitution(String institutionId, String name) {
-        StringBuilder sql = new StringBuilder("SELECT a.[ApplicationID], ap.[Name], ap.[BirthDate], a.[IdentityType], ap.[CurrentOrder] " +
+        StringBuilder sql = new StringBuilder("SELECT a.[ApplicationID], ap.[Name],a.[CaseNumber], ap.[BirthDate], a.[IdentityType], ap.[CurrentOrder],i.[InstitutionName] " +
                 "FROM [dbo].[applications] a " +
+                "LEFT JOIN [dbo].[institutions] i ON i.[InstitutionID] = a.[InstitutionID] " +
                 "LEFT JOIN [dbo].[application_participants] ap ON a.[ApplicationID] = ap.[ApplicationID] " +
                 "WHERE ap.[Status] = '候補中' AND ap.[ParticipantType] = 0 ");
         // 動態組合條件

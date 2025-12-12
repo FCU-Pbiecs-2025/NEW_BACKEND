@@ -207,4 +207,15 @@ public class BannersJdbcRepository {
         Timestamp now = new Timestamp(System.currentTimeMillis());
         return jdbcTemplate.query(sql, BANNERS_ROW_MAPPER, now, now);
     }
+
+    /**
+     * 批次將 endTime 已過期且狀態為上架的 banners 設為下架
+     * 假設 Status = true 為上架, false 為下架
+     * 可根據實際狀態值調整
+     */
+    public int updateExpiredBanners() {
+        String sql = "UPDATE " + TABLE_NAME + " SET Status = 1 WHERE Status = 0 AND EndTime < ?";
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        return jdbcTemplate.update(sql, now);
+    }
 }

@@ -337,4 +337,37 @@ public class UserJdbcRepository {
             throw new RuntimeException("Failed to update account status", e);
         }
     }
+
+    /**
+     * 模糊查詢使用者，支援分頁
+     * @param searchTerm 搜尋關鍵字（會搜尋帳號、姓名、信箱、機構名稱）
+     * @param offset 起始位置
+     * @param limit 分頁大小
+     * @return 符合條件的使用者列表
+     */
+    public List<Group4.Childcare.DTO.UserSummaryDTO> searchUsersWithOffset(String searchTerm, int offset, int limit) {
+        String sql = "SELECT u.UserID, u.Account, u.PermissionType, u.AccountStatus, i.InstitutionName " +
+                     "FROM " + TABLE_NAME + " u LEFT JOIN institutions i ON u.InstitutionID = i.InstitutionID " +
+                     "WHERE (u.Account LIKE ? OR u.Name LIKE ? OR u.Email LIKE ? OR i.InstitutionName LIKE ?) " +
+                     "ORDER BY u.UserID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        String searchPattern = "%" + searchTerm + "%";
+        return jdbcTemplate.query(sql, USER_SUMMARY_ROW_MAPPER,
+            searchPattern, searchPattern, searchPattern, searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算模糊查詢的總筆數
+     * @param searchTerm 搜尋關鍵字
+     * @return 符合條件的總筆數
+     */
+    public long countSearchUsers(String searchTerm) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " u LEFT JOIN institutions i ON u.InstitutionID = i.InstitutionID " +
+                     "WHERE (u.Account LIKE ? OR u.Name LIKE ? OR u.Email LIKE ? OR i.InstitutionName LIKE ?)";
+
+        String searchPattern = "%" + searchTerm + "%";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class,
+            searchPattern, searchPattern, searchPattern, searchPattern);
+        return count != null ? count : 0;
+    }
 }

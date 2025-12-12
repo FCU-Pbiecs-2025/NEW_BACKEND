@@ -514,4 +514,78 @@ public class UsersController {
     }
   }
 
+  /**
+   * GET  /users/search
+   * 模糊查詢使用者，支援分頁
+   * 範例資料:
+   * {
+   *     "offset": 0,
+   *     "size": 10,
+   *     "totalPages": 1,
+   *     "hasNext": false,
+   *     "searchTerm": "王",
+   *     "content": [
+   *         {
+   *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+   *             "account": "wang001",
+   *             "institutionName": "小天使托嬰中心",
+   *             "permissionType": 2,
+   *             "accountStatus": 1
+   *         }
+   *     ],
+   *     "totalElements": 1
+   * }
+   * 搜尋使用者（帳號、姓名、信箱、機構名稱）
+   *
+   * @param searchTerm 搜尋關鍵字
+   * @param offset 起始位置
+   * @param size   頁面大小
+   * @return 搜尋結果及分頁資訊
+   **/
+  @GetMapping("/search")
+  public ResponseEntity<Map<String, Object>> searchUsers(
+          @RequestParam(required = false) String searchTerm,
+          @RequestParam(defaultValue = "0") int offset,
+          @RequestParam(defaultValue = "10") int size) {
+    try {
+      if (offset < 0 || size <= 0) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid offset/size"));
+      }
+
+      final int MAX_SIZE = 100;
+      if (size > MAX_SIZE) size = MAX_SIZE;
+
+      // 如果搜尋關鍵字為空或null，返回一般分頁結果
+      List<UserSummaryDTO> users;
+      long totalCount;
+
+      if (searchTerm == null || searchTerm.trim().isEmpty()) {
+        users = usersService.getUsersWithOffsetAndInstitutionNameJdbc(offset, size);
+        totalCount = usersService.getTotalCount();
+      } else {
+        users = usersService.searchUsersWithOffset(searchTerm, offset, size);
+        totalCount = usersService.getSearchCount(searchTerm);
+      }
+
+      Map<String, Object> response = new HashMap<>();
+      response.put("content", users);
+      response.put("offset", offset);
+      response.put("size", size);
+      response.put("searchTerm", searchTerm);
+      response.put("totalElements", totalCount);
+      response.put("totalPages", (int) Math.ceil((double) totalCount / size));
+      response.put("hasNext", offset + size < totalCount);
+
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      System.err.println("Error in searchUsers: " + e.getMessage());
+      e.printStackTrace();
+
+      Map<String, Object> errorResponse = new HashMap<>();
+      errorResponse.put("error", "Internal server error");
+      errorResponse.put("message", e.getMessage());
+      return ResponseEntity.status(500).body(errorResponse);
+    }
+  }
+
 }

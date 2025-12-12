@@ -3,6 +3,7 @@ package Group4.Childcare.Service;
 import Group4.Childcare.Model.Banners;
 import Group4.Childcare.Repository.BannersJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -49,5 +50,15 @@ public class BannersService {
     // 取得上架且未過期的 banners
     public List<Banners> findActiveBanners() {
         return repository.findActiveBanners();
+    }
+
+    /**
+     * 定時檢查並自動下架已過期的 banners
+     * 每分鐘執行一次
+     */
+    @Scheduled(cron = "0 * * * * *") // 每分鐘 0 秒執行
+    public void autoExpireBanners() {
+        int updated = repository.updateExpiredBanners();
+
     }
 }
