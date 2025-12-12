@@ -181,66 +181,6 @@ public class InstitutionsController {
    *             "latitude": 24.148000,
    *             "longitude": 120.664000,
    *             "institutionsType": true
-   *         },
-   *         {
-   *             "institutionID": "a2b1140e-2b46-40eb-828b-57bfcd343712",
-   *             "institutionName": "彩虹幼兒園",
-   *             "contactPerson": "張志偉",
-   *             "address": "新北市板橋區中山路一段50號",
-   *             "phoneNumber": "02-29876543",
-   *             "fax": "02-29876540",
-   *             "email": "rainbow@daycare.com",
-   *             "relatedLinks": "https://rainbow-daycare.com",
-   *             "description": "多元化的學習環境",
-   *             "responsiblePerson": "張國華",
-   *             "imagePath": "/images/institution3.jpg",
-   *             "createdUser": "admin",
-   *             "createdTime": "2025-11-20T22:06:47.46",
-   *             "updatedUser": "admin",
-   *             "updatedTime": "2025-11-20T22:06:47.46",
-   *             "latitude": 25.008000,
-   *             "longitude": 121.459000,
-   *             "institutionsType": false
-   *         },
-   *         {
-   *             "institutionID": "3a38b774-edbe-4423-b0ec-8844274ffa07",
-   *             "institutionName": "陽光托嬰中心",
-   *             "contactPerson": "李美玲",
-   *             "address": "台北市大安區敦化南路二段200號",
-   *             "phoneNumber": "02-27654321",
-   *             "fax": "02-27654320",
-   *             "email": "sunshine@daycare.com",
-   *             "relatedLinks": "https://sunshine-daycare.com",
-   *             "description": "專業的嬰幼兒照護",
-   *             "responsiblePerson": "李大華",
-   *             "imagePath": "/images/institution2.jpg",
-   *             "createdUser": "admin",
-   *             "createdTime": "2025-11-20T22:06:47.46",
-   *             "updatedUser": "admin",
-   *             "updatedTime": "2025-11-20T22:06:47.46",
-   *             "latitude": 25.026000,
-   *             "longitude": 121.549000,
-   *             "institutionsType": true
-   *         },
-   *         {
-   *             "institutionID": "afe88ff9-98b0-421c-a949-cce8b9327113",
-   *             "institutionName": "快樂幼兒園",
-   *             "contactPerson": "王小明",
-   *             "address": "台北市中正區重慶南路一段100號",
-   *             "phoneNumber": "02-23456789",
-   *             "fax": "02-23456780",
-   *             "email": "happy@daycare.com",
-   *             "relatedLinks": "https://happy-daycare.com",
-   *             "description": "提供優質的幼兒照護服務",
-   *             "responsiblePerson": "王大明",
-   *             "imagePath": "/images/institution1.jpg",
-   *             "createdUser": "admin",
-   *             "createdTime": "2025-11-20T22:06:47.46",
-   *             "updatedUser": "admin",
-   *             "updatedTime": "2025-11-20T22:06:47.46",
-   *             "latitude": 25.042000,
-   *             "longitude": 121.513000,
-   *             "institutionsType": false
    *         }
    *     ],
    *     "totalElements": 4
@@ -249,14 +189,36 @@ public class InstitutionsController {
    * @param offset 起始項目索引
    * @param size 每頁大小
    * @param InstitutionID 機構 ID（可選，admin 角色傳入以過濾特定機構）
+   * @param search 搜尋關鍵字（可選，搜尋機構名稱、聯絡人、電話）
    * @return ResponseEntity<InstitutionOffsetDTO>
    */
   @GetMapping("/offset")
   public ResponseEntity<Group4.Childcare.DTO.InstitutionOffsetDTO> getOffset(
           @RequestParam(defaultValue = "0") int offset,
           @RequestParam(defaultValue = "10") int size,
-          @RequestParam(required = false) UUID InstitutionID) {
+          @RequestParam(required = false) UUID InstitutionID,
+          @RequestParam(required = false) String search) {
 
-    return ResponseEntity.ok(service.getOffset(offset, size, InstitutionID));
+    return ResponseEntity.ok(service.getOffset(offset, size, InstitutionID, search));
+  }
+
+  /**
+   * GET /institutions/offset/name-search
+   * 專門搜尋機構名稱的分頁API
+   * 取得機構分頁資料（僅搜尋機構名稱）
+   * @param offset 起始項目索引
+   * @param size 每頁大小
+   * @param InstitutionID 機構 ID（可選，admin 角色傳入以過濾特定機構）
+   * @param name 機構名稱搜尋關鍵字（可選，僅搜尋機構名稱）
+   * @return ResponseEntity<InstitutionOffsetDTO>
+   */
+  @GetMapping("/offset/name-search")
+  public ResponseEntity<Group4.Childcare.DTO.InstitutionOffsetDTO> getOffsetByName(
+          @RequestParam(defaultValue = "0") int offset,
+          @RequestParam(defaultValue = "10") int size,
+          @RequestParam(required = false) UUID InstitutionID,
+          @RequestParam(required = false) String name) {
+
+    return ResponseEntity.ok(service.getOffsetByName(offset, size, InstitutionID, name));
   }
 }

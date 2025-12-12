@@ -57,6 +57,7 @@ public class InstitutionsJdbcRepository {
 
             institution.setLatitude(rs.getBigDecimal("Latitude"));
             institution.setLongitude(rs.getBigDecimal("Longitude"));
+            institution.setInstitutionsType(rs.getBoolean("InstitutionsType"));
 
             return institution;
         }
@@ -96,11 +97,20 @@ public class InstitutionsJdbcRepository {
      * @return 新增後的機構物件
      */
     private Institutions insert(Institutions institution) {
+        // 自動設置時間戳
+        LocalDateTime now = LocalDateTime.now();
+        if (institution.getCreatedTime() == null) {
+            institution.setCreatedTime(now);
+        }
+        if (institution.getUpdatedTime() == null) {
+            institution.setUpdatedTime(now);
+        }
+
         String sql = "INSERT INTO " + TABLE_NAME +
                     " (InstitutionID, InstitutionName, ContactPerson, Address, PhoneNumber, Fax, Email, " +
                     "RelatedLinks, Description, ResponsiblePerson, ImagePath, CreatedUser, CreatedTime, " +
-                    "UpdatedUser, UpdatedTime, Latitude, Longitude) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    "UpdatedUser, UpdatedTime, Latitude, Longitude, InstitutionsType) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // 執行 SQL 新增
         jdbcTemplate.update(sql,
@@ -120,7 +130,8 @@ public class InstitutionsJdbcRepository {
             institution.getUpdatedUser(),
             institution.getUpdatedTime(),
             institution.getLatitude(),
-            institution.getLongitude()
+            institution.getLongitude(),
+            institution.getInstitutionsType()
         );
 
         return institution;
@@ -132,11 +143,14 @@ public class InstitutionsJdbcRepository {
      * @return 更新後的機構物件
      */
     private Institutions update(Institutions institution) {
+        // 自動設置更新時間
+        institution.setUpdatedTime(LocalDateTime.now());
+
         String sql = "UPDATE " + TABLE_NAME +
                     " SET InstitutionName = ?, ContactPerson = ?, Address = ?, PhoneNumber = ?, " +
                     "Fax = ?, Email = ?, RelatedLinks = ?, Description = ?, ResponsiblePerson = ?, " +
                     "ImagePath = ?, CreatedUser = ?, CreatedTime = ?, UpdatedUser = ?, UpdatedTime = ?, " +
-                    "Latitude = ?, Longitude = ? WHERE InstitutionID = ?";
+                    "Latitude = ?, Longitude = ?, InstitutionsType = ? WHERE InstitutionID = ?";
 
         // 執行 SQL 更新
         jdbcTemplate.update(sql,
@@ -156,6 +170,7 @@ public class InstitutionsJdbcRepository {
             institution.getUpdatedTime(),
             institution.getLatitude(),
             institution.getLongitude(),
+            institution.getInstitutionsType(),
             institution.getInstitutionID().toString()
         );
 
@@ -279,6 +294,122 @@ public class InstitutionsJdbcRepository {
     public long countByInstitutionID(UUID institutionID) {
         String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE InstitutionID = ?";
         Long count = jdbcTemplate.queryForObject(sql, Long.class, institutionID.toString());
+        return count != null ? count : 0;
+    }
+
+    /**
+     * 根據搜尋條件分頁查詢所有機構
+     * @param search 搜尋關鍵字
+     * @param offset 起始位置
+     * @param limit 每頁數量
+     * @return List<Institutions>
+     */
+    public List<Institutions> findAllWithSearchAndPagination(String search, int offset, int limit) {
+        String sql = "SELECT * FROM " + TABLE_NAME +
+                    " WHERE InstitutionName LIKE ? OR ContactPerson LIKE ? OR PhoneNumber LIKE?" +
+                    " ORDER BY InstitutionID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        String searchPattern = "%" + search + "%";
+        return jdbcTemplate.query(sql, INSTITUTIONS_ROW_MAPPER, searchPattern, searchPattern, searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算搜尋條件下的總數
+     * @param search 搜尋關鍵字
+     * @return 數量
+     */
+    public long countAllWithSearch(String search) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME +
+                    " WHERE InstitutionName LIKE ? OR ContactPerson LIKE ? OR PhoneNumber LIKE ?";
+        String searchPattern = "%" + search + "%";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, searchPattern, searchPattern, searchPattern);
+        return count != null ? count : 0;
+    }
+
+    /**
+     * 根據機構 ID 和搜尋條件分頁查詢（admin 角色使用）
+     * @param institutionID 機構 ID
+     * @param search 搜尋關鍵字
+     * @param offset 起始位置
+     * @param limit 每頁數量
+     * @return List<Institutions>
+     */
+    public List<Institutions> findByInstitutionIDWithSearchAndPagination(UUID institutionID, String search, int offset, int limit) {
+        String sql = "SELECT * FROM " + TABLE_NAME +
+                    " WHERE InstitutionID = ? AND (InstitutionName LIKE ? OR ContactPerson LIKE ? OR PhoneNumber LIKE ?)" +
+                    " ORDER BY InstitutionID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        String searchPattern = "%" + search + "%";
+        return jdbcTemplate.query(sql, INSTITUTIONS_ROW_MAPPER, institutionID.toString(), searchPattern, searchPattern, searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算指定機構和搜尋條件下的總數
+     * @param institutionID 機構 ID
+     * @param search 搜尋關鍵字
+     * @return 數量
+     */
+    public long countByInstitutionIDWithSearch(UUID institutionID, String search) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME +
+                    " WHERE InstitutionID = ? AND (InstitutionName LIKE ? OR ContactPerson LIKE ? OR PhoneNumber LIKE ?)";
+        String searchPattern = "%" + search + "%";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, institutionID.toString(), searchPattern, searchPattern, searchPattern);
+        return count != null ? count : 0;
+    }
+
+    /**
+     * 根據機構名稱搜尋條件分頁查詢所有機構（僅搜尋機構名稱）
+     * @param name 機構名稱搜尋關鍵字
+     * @param offset 起始位置
+     * @param limit 每頁數量
+     * @return List<Institutions>
+     */
+    public List<Institutions> findAllWithNameSearchAndPagination(String name, int offset, int limit) {
+        String sql = "SELECT * FROM " + TABLE_NAME +
+                    " WHERE InstitutionName LIKE ?" +
+                    " ORDER BY InstitutionID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        String searchPattern = "%" + name + "%";
+        return jdbcTemplate.query(sql, INSTITUTIONS_ROW_MAPPER, searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算機構名稱搜尋條件下的總數（僅搜尋機構名稱）
+     * @param name 機構名稱搜尋關鍵字
+     * @return 數量
+     */
+    public long countAllWithNameSearch(String name) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME +
+                    " WHERE InstitutionName LIKE ?";
+        String searchPattern = "%" + name + "%";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, searchPattern);
+        return count != null ? count : 0;
+    }
+
+    /**
+     * 根據機構 ID 和機構名稱搜尋條件分頁查詢（admin 角色使用，僅搜尋機構名稱）
+     * @param institutionID 機構 ID
+     * @param name 機構名稱搜尋關鍵字
+     * @param offset 起始位置
+     * @param limit 每頁數量
+     * @return List<Institutions>
+     */
+    public List<Institutions> findByInstitutionIDWithNameSearchAndPagination(UUID institutionID, String name, int offset, int limit) {
+        String sql = "SELECT * FROM " + TABLE_NAME +
+                    " WHERE InstitutionID = ? AND InstitutionName LIKE ?" +
+                    " ORDER BY InstitutionID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        String searchPattern = "%" + name + "%";
+        return jdbcTemplate.query(sql, INSTITUTIONS_ROW_MAPPER, institutionID.toString(), searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算指定機構和機構名稱搜尋條件下的總數（僅搜尋機構名稱）
+     * @param institutionID 機構 ID
+     * @param name 機構名稱搜尋關鍵字
+     * @return 數量
+     */
+    public long countByInstitutionIDWithNameSearch(UUID institutionID, String name) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME +
+                    " WHERE InstitutionID = ? AND InstitutionName LIKE ?";
+        String searchPattern = "%" + name + "%";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, institutionID.toString(), searchPattern);
         return count != null ? count : 0;
     }
 }

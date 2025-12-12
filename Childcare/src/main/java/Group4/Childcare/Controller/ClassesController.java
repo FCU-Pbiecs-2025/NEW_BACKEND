@@ -163,6 +163,7 @@ public class ClassesController {
     public ResponseEntity<Map<String, Object>> searchByInstitutionName(
             @RequestParam("name") String institutionName,
             @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) UUID InstitutionID) {
         if (institutionName == null || institutionName.trim().isEmpty()) {
             return ResponseEntity.badRequest().build();
@@ -171,6 +172,7 @@ public class ClassesController {
         System.out.println("===== ClassesController.searchByInstitutionName =====");
         System.out.println("institutionName: " + institutionName);
         System.out.println("offset: " + offset);
+        System.out.println("size: " + size);
         System.out.println("InstitutionID: " + InstitutionID);
 
         List<ClassSummaryDTO> allClasses = service.searchClassesByInstitutionName(institutionName.trim());
@@ -185,14 +187,13 @@ public class ClassesController {
 
         System.out.println("Filtered classes count: " + allClasses.size());
 
-        // 手動分頁處理
-        int size = 10;
+        // 手動分頁處理，使用請求的 size
         int totalElements = allClasses.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
 
         // 取得當前頁面的資料
         List<ClassSummaryDTO> pagedClasses;
-        if (offset >= totalElements) {
+        if (size <= 0 || offset >= totalElements) {
             pagedClasses = new ArrayList<>();
         } else {
             int endIndex = Math.min(offset + size, totalElements);

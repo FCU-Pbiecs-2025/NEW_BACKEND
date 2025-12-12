@@ -116,12 +116,17 @@ public class ClassesJdbcRepository {
 
     // Save method
     public Classes save(Classes classes) {
+        // If no ID provided, generate and insert
         if (classes.getClassID() == null) {
             classes.setClassID(UUID.randomUUID());
             return insert(classes);
-        } else {
-            return update(classes);
         }
+        // If ID provided but doesn't exist yet, treat as insert
+        if (!existsById(classes.getClassID())) {
+            return insert(classes);
+        }
+        // Otherwise update existing
+        return update(classes);
     }
 
     // Insert method
@@ -331,7 +336,7 @@ public class ClassesJdbcRepository {
      * @return List<ClassSummaryDTO>
      */
     public List<ClassSummaryDTO> findClassesByInstitutionName(String institutionName) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.CurrentStudents, i.InstitutionName, i.InstitutionID " +
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, i.InstitutionName, i.InstitutionID " +
                      "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
                      "WHERE i.InstitutionName LIKE ? " +
                      "ORDER BY i.InstitutionName, c.ClassName";
