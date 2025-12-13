@@ -236,8 +236,8 @@ public class ApplicationsJdbcRepository {
      */
     public Optional<String> getUserEmailByApplicationId(UUID applicationId) {
         String sql = "SELECT u.Email FROM users u " +
-                     "INNER JOIN applications a ON u.UserID = a.UserID " +
-                     "WHERE a.ApplicationID = ?";
+                "INNER JOIN applications a ON u.UserID = a.UserID " +
+                "WHERE a.ApplicationID = ?";
         try {
             String email = jdbcTemplate.queryForObject(sql, String.class, applicationId.toString());
             return Optional.ofNullable(email);
@@ -430,7 +430,7 @@ public class ApplicationsJdbcRepository {
 
                 // 檢查是否為幼兒
                 boolean isChild = (participantType != null && participantType == false) ||
-                                  (p.participantType != null && ("幼兒".equals(p.participantType) || "0".equals(p.participantType)));
+                        (p.participantType != null && ("幼兒".equals(p.participantType) || "0".equals(p.participantType)));
 
                 // 如果是幼兒且 CurrentOrder 為 null，自動設置排序號
                 if (isChild && p.currentOrder == null) {
@@ -455,11 +455,11 @@ public class ApplicationsJdbcRepository {
                     if (institutionId != null) {
                         // 查詢同機構的最大CurrentOrder值
                         String getMaxOrderSql =
-                            "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
-                            "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
-                            "WHERE a.InstitutionID = ? " +
-                            "AND ap.CurrentOrder IS NOT NULL " +
-                            "AND ap.ParticipantType = 0";  // 只檢查幼兒記錄
+                                "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
+                                        "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
+                                        "WHERE a.InstitutionID = ? " +
+                                        "AND ap.CurrentOrder IS NOT NULL " +
+                                        "AND ap.ParticipantType = 0";  // 只檢查幼兒記錄
 
                         Integer maxOrder = null;
                         try {
@@ -744,11 +744,11 @@ public class ApplicationsJdbcRepository {
                 if (institutionId != null) {
                     // 查詢同機構的最大CurrentOrder值
                     String getMaxOrderSql =
-                        "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
-                        "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
-                        "WHERE a.InstitutionID = ? " +
-                        "AND ap.CurrentOrder IS NOT NULL " +
-                        "AND ap.ParticipantType = 0";
+                            "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
+                                    "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
+                                    "WHERE a.InstitutionID = ? " +
+                                    "AND ap.CurrentOrder IS NOT NULL " +
+                                    "AND ap.ParticipantType = 0";
 
                     Integer maxOrder = null;
                     try {
@@ -790,13 +790,13 @@ public class ApplicationsJdbcRepository {
             if (institutionId != null) {
                 // 將該個案後面所有的 CurrentOrder 減 1
                 String updateFollowingOrdersSql =
-                    "UPDATE application_participants " +
-                    "SET CurrentOrder = CurrentOrder - 1 " +
-                    "WHERE ParticipantType = 0 " +
-                    "AND CurrentOrder > ? " +
-                    "AND ApplicationID IN ( " +
-                    "  SELECT ApplicationID FROM applications WHERE InstitutionID = ? " +
-                    ")";
+                        "UPDATE application_participants " +
+                                "SET CurrentOrder = CurrentOrder - 1 " +
+                                "WHERE ParticipantType = 0 " +
+                                "AND CurrentOrder > ? " +
+                                "AND ApplicationID IN ( " +
+                                "  SELECT ApplicationID FROM applications WHERE InstitutionID = ? " +
+                                ")";
 
                 try {
                     int updatedCount = jdbcTemplate.update(updateFollowingOrdersSql, oldCurrentOrder, institutionId.toString());
@@ -1460,6 +1460,5 @@ public class ApplicationsJdbcRepository {
         return count != null ? count : 0;
     }
 }
-
 
 
