@@ -4,9 +4,11 @@ import Group4.Childcare.Service.AuthService;
 import Group4.Childcare.Service.PasswordResetService;
 import Group4.Childcare.Service.RecaptchaService;
 import Group4.Childcare.DTO.ForgotPasswordRequest;
+import Group4.Childcare.DTO.LoginRequest;
 import Group4.Childcare.DTO.VerifyResetTokenRequest;
 import Group4.Childcare.DTO.ResetPasswordRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -27,10 +29,17 @@ public class AuthController {
     private RecaptchaService recaptchaService;
 
     @PostMapping("/login")
-    public Map<String, Object> login(@RequestBody Map<String, String> loginRequest) {
-        String account = loginRequest.get("account");
-        String password = loginRequest.get("password");
-        return authService.login(account, password);
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
+        boolean isCaptchaValid = recaptchaService.verify(loginRequest.getRecaptchaToken());
+        if (!isCaptchaValid) {
+            return ResponseEntity.badRequest().body(Map.of("message", "機器人驗證失敗，請重試！"));
+        }
+
+        Map<String, Object> response = authService.login(loginRequest.getAccount(), loginRequest.getPassword());
+        if (response.containsKey("error")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/register")

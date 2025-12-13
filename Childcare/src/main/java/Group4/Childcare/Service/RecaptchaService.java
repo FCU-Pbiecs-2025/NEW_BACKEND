@@ -1,52 +1,50 @@
 package Group4.Childcare.Service;
 
+import Group4.Childcare.DTO.RecaptchaResponse;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-
-import java.util.Map;
 
 @Service
 public class RecaptchaService {
 
-    @Value("${recaptcha.secret:}")
-    private String secretKey;
+    @Value("${google.recaptcha.secret}")
+    private String recaptchaSecret;
 
-    @Value("${recaptcha.verify-url:https://www.google.com/recaptcha/api/siteverify}")
-    private String verifyUrl;
+    @Value("${google.recaptcha.url}")
+    private String recaptchaUrl;
 
-    @Value("${recaptcha.enabled:false}")
-    private boolean enabled;
+    @Value("${google.recaptcha.v3.threshold}")
+    private float recaptchaThreshold;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    public RecaptchaService() {
+        this.restTemplate = new RestTemplate();
+    }
 
     public boolean verify(String token) {
-        if (!enabled) return true; // skip verification when disabled
-        if (token == null || token.isBlank()) return false;
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            String body = "secret=" + secretKey + "&response=" + token;
-            HttpEntity<String> entity = new HttpEntity<>(body, headers);
-            ResponseEntity<Map> resp = restTemplate.postForEntity(verifyUrl, entity, Map.class);
-            Map<String, Object> map = resp.getBody();
-            if (map == null) return false;
-            Object success = map.get("success");
-            if (success instanceof Boolean b && b) {
-                Object scoreObj = map.get("score");
-                if (scoreObj instanceof Number n) {
-                    return n.doubleValue() >= 0.5;
-                }
-                return true;
-            }
-            return false;
-        } catch (Exception e) {
-            // on error, fail closed
+        if (token == null || token.isEmpty()) {
             return false;
         }
+
+        try {
+            MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+            map.add("secret", recaptchaSecret);
+            map.add("response", token);
+
+            RecaptchaResponse response = restTemplate.postForObject(recaptchaUrl, map, RecaptchaResponse.class);
+
+            if (response != null && response.isSuccess()) {
+                return response.getScore() >= recaptchaThreshold;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        return false;
     }
 }
+
