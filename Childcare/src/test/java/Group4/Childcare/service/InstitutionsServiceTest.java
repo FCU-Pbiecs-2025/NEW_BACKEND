@@ -265,7 +265,7 @@ class InstitutionsServiceTest {
         when(repository.count()).thenReturn(totalElements);
 
         // When
-        InstitutionOffsetDTO result = service.getOffset(offset, size, null);
+        InstitutionOffsetDTO result = service.getOffset(offset, size, null, null);
 
         // Then
         assertNotNull(result);
@@ -290,7 +290,7 @@ class InstitutionsServiceTest {
         when(repository.countByInstitutionID(testInstitutionId)).thenReturn(totalElements);
 
         // When
-        InstitutionOffsetDTO result = service.getOffset(offset, size, testInstitutionId);
+        InstitutionOffsetDTO result = service.getOffset(offset, size, testInstitutionId, null);
 
         // Then
         assertNotNull(result);
@@ -315,7 +315,7 @@ class InstitutionsServiceTest {
         when(repository.count()).thenReturn(10L);
 
         // When
-        InstitutionOffsetDTO result = service.getOffset(offset, invalidSize, null);
+        InstitutionOffsetDTO result = service.getOffset(offset, invalidSize, null, null);
 
         // Then
         assertNotNull(result);
@@ -335,7 +335,7 @@ class InstitutionsServiceTest {
         when(repository.count()).thenReturn(10L);
 
         // When
-        InstitutionOffsetDTO result = service.getOffset(invalidOffset, size, null);
+        InstitutionOffsetDTO result = service.getOffset(invalidOffset, size, null, null);
 
         // Then
         assertNotNull(result);
@@ -355,7 +355,7 @@ class InstitutionsServiceTest {
         when(repository.count()).thenReturn(totalElements);
 
         // When
-        InstitutionOffsetDTO result = service.getOffset(offset, size, null);
+        InstitutionOffsetDTO result = service.getOffset(offset, size, null, null);
 
         // Then
         assertNotNull(result);

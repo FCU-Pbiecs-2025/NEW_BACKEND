@@ -721,50 +721,71 @@ public class ApplicationsJdbcRepository {
             ex.printStackTrace();
         }
 
-        Integer currentOrder = null;
+        Integer currentOrder = oldCurrentOrder; // 預設保持原有的 CurrentOrder
 
-        // 情況1: 如果狀態改為"候補中"，設置新的 CurrentOrder
+        // 情況1: 如果狀態改為"候補中"，根據舊狀態決定是否自動分配新序號
         if (status != null && "候補中".equals(status)) {
             System.out.println("  狀態改為候補中，開始處理 CurrentOrder");
+            System.out.println("  舊狀態: " + oldStatus);
 
             if (isChild != null && isChild) {
-                // 獲取該申請案件的InstitutionID
-                String getInstitutionIdSql = "SELECT InstitutionID FROM applications WHERE ApplicationID = ?";
-                java.util.UUID institutionId = null;
-                try {
-                    String institutionIdStr = jdbcTemplate.queryForObject(getInstitutionIdSql, String.class, id.toString());
-                    if (institutionIdStr != null) {
-                        institutionId = java.util.UUID.fromString(institutionIdStr);
-                        System.out.println("  InstitutionID: " + institutionId);
-                    }
-                } catch (Exception ex) {
-                    System.out.println("  ❌ 無法獲取 InstitutionID: " + ex.getMessage());
+                // ✅ 關鍵邏輯：如果舊狀態是「審核中」，無論是否已有序號都重新分配
+                boolean shouldAssignNewOrder = false;
+
+                if ("審核中".equals(oldStatus)) {
+                    System.out.println("  從審核中變為候補中，需要自動分配新序號");
+                    shouldAssignNewOrder = true;
+                } else if (oldCurrentOrder == null) {
+                    System.out.println("  CurrentOrder 為 null，需要自動分配序號");
+                    shouldAssignNewOrder = true;
+                } else {
+                    System.out.println("  不是從審核中轉換且已有序號 (" + oldCurrentOrder + ")，保持不變");
+                    shouldAssignNewOrder = false;
                 }
 
-                if (institutionId != null) {
-                    // 查詢同機構的最大CurrentOrder值
-                    String getMaxOrderSql =
-                            "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
-                                    "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
-                                    "WHERE a.InstitutionID = ? " +
-                                    "AND ap.CurrentOrder IS NOT NULL " +
-                                    "AND ap.ParticipantType = 0";
+                if (shouldAssignNewOrder) {
+                    System.out.println("  開始查詢該機構的最大 CurrentOrder...");
 
-                    Integer maxOrder = null;
+                    // 獲取該申請案件的InstitutionID
+                    String getInstitutionIdSql = "SELECT InstitutionID FROM applications WHERE ApplicationID = ?";
+                    java.util.UUID institutionId = null;
                     try {
-                        maxOrder = jdbcTemplate.queryForObject(getMaxOrderSql, Integer.class, institutionId.toString());
-                        System.out.println("  查詢到的最大 CurrentOrder: " + maxOrder);
+                        String institutionIdStr = jdbcTemplate.queryForObject(getInstitutionIdSql, String.class, id.toString());
+                        if (institutionIdStr != null) {
+                            institutionId = java.util.UUID.fromString(institutionIdStr);
+                            System.out.println("  InstitutionID: " + institutionId);
+                        }
                     } catch (Exception ex) {
-                        System.out.println("  查詢最大 CurrentOrder 失敗 (可能沒有記錄): " + ex.getMessage());
+                        System.out.println("  ❌ 無法獲取 InstitutionID: " + ex.getMessage());
                     }
 
-                    if (maxOrder == null) {
-                        currentOrder = 1;
-                        System.out.println("  ✅ 設置 CurrentOrder = 1 (首個候補)");
-                    } else {
-                        currentOrder = maxOrder + 1;
-                        System.out.println("  ✅ 設置 CurrentOrder = " + currentOrder + " (maxOrder + 1)");
+                    if (institutionId != null) {
+                        // 查詢同機構的最大CurrentOrder值
+                        String getMaxOrderSql =
+                                "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
+                                        "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
+                                        "WHERE a.InstitutionID = ? " +
+                                        "AND ap.CurrentOrder IS NOT NULL " +
+                                        "AND ap.ParticipantType = 0";
+
+                        Integer maxOrder = null;
+                        try {
+                            maxOrder = jdbcTemplate.queryForObject(getMaxOrderSql, Integer.class, institutionId.toString());
+                            System.out.println("  查詢到的最大 CurrentOrder: " + maxOrder);
+                        } catch (Exception ex) {
+                            System.out.println("  查詢最大 CurrentOrder 失敗 (可能沒有記錄): " + ex.getMessage());
+                        }
+
+                        if (maxOrder == null) {
+                            currentOrder = 1;
+                            System.out.println("  ✅ 設置 CurrentOrder = 1 (該機構第一個候補序號)");
+                        } else {
+                            currentOrder = maxOrder + 1;
+                            System.out.println("  ✅ 設置 CurrentOrder = " + currentOrder + " (最大值 " + maxOrder + " + 1)");
+                        }
                     }
+                } else {
+                    currentOrder = oldCurrentOrder; // 保持原有序號
                 }
             } else {
                 System.out.println("  ⚠️ 非幼兒記錄，不設置 CurrentOrder");

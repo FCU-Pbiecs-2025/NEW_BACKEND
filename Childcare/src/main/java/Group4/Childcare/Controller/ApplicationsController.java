@@ -593,34 +593,8 @@ public class ApplicationsController {
                     System.err.println("Failed to parse suspendEnd for participant: " + dto.suspendEnd + ", " + e.getMessage());
                 }
 
-                // 如果是幼兒且 CurrentOrder 為 null，自動設置排序號
-                if (!isParent && dto.currentOrder == null) {
-                    System.out.println("  🔵 幼兒 CurrentOrder 為 null，自動查詢並設置排序號...");
-                    try {
-                        // 查詢該機構的最大 CurrentOrder
-                        String getMaxOrderSql =
-                                "SELECT MAX(ap.CurrentOrder) FROM application_participants ap " +
-                                        "INNER JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
-                                        "WHERE a.InstitutionID = ? " +
-                                        "AND ap.CurrentOrder IS NOT NULL " +
-                                        "AND ap.ParticipantType = 0";  // 只檢查幼兒記錄
-
-                        Integer maxOrder = jdbcTemplate.queryForObject(getMaxOrderSql, Integer.class, caseDto.getInstitutionId().toString());
-
-                        if (maxOrder == null) {
-                            participant.setCurrentOrder(1);
-                            System.out.println("  ✅ 設置 CurrentOrder = 1 (該機構第一個排序號)");
-                        } else {
-                            participant.setCurrentOrder(maxOrder + 1);
-                            System.out.println("  ✅ 設置 CurrentOrder = " + (maxOrder + 1) + " (最大值 + 1)");
-                        }
-                    } catch (Exception e) {
-                        System.err.println("  ⚠️ 查詢最大 CurrentOrder 失敗: " + e.getMessage());
-                        participant.setCurrentOrder(dto.currentOrder);  // 使用原值
-                    }
-                } else {
-                    participant.setCurrentOrder(dto.currentOrder);
-                }
+                // 直接使用 DTO 傳入的 CurrentOrder 值（不自動分配）
+                participant.setCurrentOrder(dto.currentOrder);
 
                 participant.setStatus(dto.status);
                 participant.setReason(dto.reason);
