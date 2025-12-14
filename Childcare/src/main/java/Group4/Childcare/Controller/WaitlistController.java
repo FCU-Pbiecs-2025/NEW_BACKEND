@@ -4,6 +4,8 @@ import Group4.Childcare.DTO.LotteryRequest;
 import Group4.Childcare.DTO.LotteryResult;
 import Group4.Childcare.DTO.ManualAdmissionRequest;
 import Group4.Childcare.Repository.WaitlistJdbcRepository;
+import Group4.Childcare.Service.EmailService;
+import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,16 +14,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @RestController
 @RequestMapping("/waitlist")
 public class WaitlistController {
     private final WaitlistJdbcRepository waitlistJdbcRepository;
+    private final EmailService emailService;
 
     @Autowired
-    public WaitlistController(WaitlistJdbcRepository waitlistJdbcRepository) {
+    public WaitlistController(WaitlistJdbcRepository waitlistJdbcRepository, EmailService emailService) {
         this.waitlistJdbcRepository = waitlistJdbcRepository;
+        this.emailService = emailService;
     }
 
     // 查詢候補名單，可依機構ID與姓名模糊查詢
@@ -240,6 +245,9 @@ public class WaitlistController {
             allUpdates.addAll(acceptedList);      // 已錄取者（CurrentOrder = null）
             allUpdates.addAll(allWaitlist);       // 所有候補者（有 CurrentOrder）
             waitlistJdbcRepository.batchUpdateApplicants(allUpdates);
+
+            // 8.5. 發送郵件通知錄取者
+            sendLotteryNotificationEmails(acceptedList, allWaitlist);
 
             // 9. 返回結果
             LotteryResult result = new LotteryResult();
@@ -487,5 +495,121 @@ public class WaitlistController {
             response.put("message", "查詢失敗: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
+    }
+
+    /**
+     * 發送抽籤通知郵件給錄取者和候補者
+     */
+    private void sendLotteryNotificationEmails(List<Map<String, Object>> acceptedList,
+                                               List<Map<String, Object>> waitlist) {
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        int successCount = 0;
+        int failCount = 0;
+
+        System.out.println("📧 開始發送抽籤通知郵件...");
+        System.out.println("  錄取人數: " + acceptedList.size());
+        System.out.println("  候補人數: " + waitlist.size());
+
+        // 發送郵件給錄取者
+        for (Map<String, Object> applicant : acceptedList) {
+            try {
+                String email = (String) applicant.get("Email");
+                String applicantName = (String) applicant.get("ApplicantName");
+                String childName = (String) applicant.get("ChildName");
+                String institutionName = (String) applicant.get("InstitutionName");
+                Long caseNumber = ((Number) applicant.get("CaseNumber")).longValue();
+                String status = (String) applicant.get("Status");
+                String reason = (String) applicant.get("Reason");
+
+                // 轉換申請日期
+                Object applicationDateObj = applicant.get("ApplicationDate");
+                String applicationDate = "";
+                if (applicationDateObj instanceof LocalDateTime) {
+                    applicationDate = ((LocalDateTime) applicationDateObj).format(dateFormatter);
+                } else if (applicationDateObj instanceof java.sql.Timestamp) {
+                    applicationDate = ((java.sql.Timestamp) applicationDateObj).toLocalDateTime().format(dateFormatter);
+                } else if (applicationDateObj instanceof String) {
+                    applicationDate = (String) applicationDateObj;
+                }
+
+                if (email != null && !email.isEmpty()) {
+                    emailService.sendApplicationStatusChangeEmail(
+                        email,
+                        applicantName,
+                        childName,
+                        institutionName,
+                        caseNumber,
+                        applicationDate,
+                        status,
+                        null, // 錄取者不需要顯示序號
+                        reason
+                    );
+                    successCount++;
+                    System.out.println("  ✅ 已發送錄取通知給: " + applicantName + " (" + email + ")");
+                } else {
+                    System.out.println("  ⚠️ 無法發送郵件給: " + applicantName + " (無 Email)");
+                    failCount++;
+                }
+            } catch (MessagingException e) {
+                System.err.println("  ❌ 發送郵件失敗: " + e.getMessage());
+                failCount++;
+            } catch (Exception e) {
+                System.err.println("  ❌ 處理申請人資料時發生錯誤: " + e.getMessage());
+                failCount++;
+            }
+        }
+
+        // 發送郵件給候補者
+        for (Map<String, Object> applicant : waitlist) {
+            try {
+                String email = (String) applicant.get("Email");
+                String applicantName = (String) applicant.get("ApplicantName");
+                String childName = (String) applicant.get("ChildName");
+                String institutionName = (String) applicant.get("InstitutionName");
+                Long caseNumber = ((Number) applicant.get("CaseNumber")).longValue();
+                String status = (String) applicant.get("Status");
+                Integer currentOrder = (Integer) applicant.get("CurrentOrder");
+
+                // 轉換申請日期
+                Object applicationDateObj = applicant.get("ApplicationDate");
+                String applicationDate = "";
+                if (applicationDateObj instanceof LocalDateTime) {
+                    applicationDate = ((LocalDateTime) applicationDateObj).format(dateFormatter);
+                } else if (applicationDateObj instanceof java.sql.Timestamp) {
+                    applicationDate = ((java.sql.Timestamp) applicationDateObj).toLocalDateTime().format(dateFormatter);
+                } else if (applicationDateObj instanceof String) {
+                    applicationDate = (String) applicationDateObj;
+                }
+
+                if (email != null && !email.isEmpty()) {
+                    emailService.sendApplicationStatusChangeEmail(
+                        email,
+                        applicantName,
+                        childName,
+                        institutionName,
+                        caseNumber,
+                        applicationDate,
+                        status,
+                        currentOrder, // 候補者需要顯示目前序號
+                        "抽籤結果：候補名單"
+                    );
+                    successCount++;
+                    System.out.println("  ✅ 已發送候補通知給: " + applicantName + " (序號: " + currentOrder + ", " + email + ")");
+                } else {
+                    System.out.println("  ⚠️ 無法發送郵件給: " + applicantName + " (無 Email)");
+                    failCount++;
+                }
+            } catch (MessagingException e) {
+                System.err.println("  ❌ 發送郵件失敗: " + e.getMessage());
+                failCount++;
+            } catch (Exception e) {
+                System.err.println("  ❌ 處理申請人資料時發生錯誤: " + e.getMessage());
+                failCount++;
+            }
+        }
+
+        System.out.println("📧 郵件發送完成！");
+        System.out.println("  成功: " + successCount + " 封");
+        System.out.println("  失敗: " + failCount + " 封");
     }
 }

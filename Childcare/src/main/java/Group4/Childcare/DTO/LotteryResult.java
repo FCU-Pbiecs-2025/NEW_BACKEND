@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -20,5 +21,5 @@ public class LotteryResult {
     private int waitlisted;
     private List<Map<String, Object>> acceptedList;
     private List<Map<String, Object>> waitlistList;
+    private List<LotteryEmailContext> acceptedEmailContexts = new ArrayList<>();
 }
-
