@@ -1480,6 +1480,31 @@ public class ApplicationsJdbcRepository {
         System.out.println("✅ [countCaseNumberWithDateFormat] Count result: " + count);
         return count != null ? count : 0;
     }
+  /**
+   * 計算指定幼兒「已錄取」狀態的案件數
+   * @param nationalID 幼兒身分證字號
+   * @return 已錄取案件數
+   */
+  public int countAcceptedApplicationsByChildNationalID(String nationalID) {
+    String sql = "SELECT COUNT(DISTINCT ApplicationID) FROM application_participants " +
+            "WHERE NationalID = ? AND ParticipantType = 0 AND Status = ?";
+    Integer count = jdbcTemplate.queryForObject(sql, Integer.class, nationalID, "已錄取");
+    return count != null ? count : 0;
+  }
+
+  /**
+   * 計算指定幼兒「審核中+需要補件+候補中+撤銷申請審核中」狀態的案件數
+   * @param nationalID 幼兒身分證字號
+   * @return 處理中案件數
+   */
+  public int countPendingApplicationsByChildNationalID(String nationalID) {
+    String sql = "SELECT COUNT(DISTINCT ApplicationID) FROM application_participants " +
+            "WHERE NationalID = ? AND ParticipantType = 0 " +
+            "AND Status IN (?, ?, ?, ?)";
+    Integer count = jdbcTemplate.queryForObject(sql, Integer.class,
+            nationalID, "審核中", "需要補件", "候補中", "撤銷申請審核中");
+    return count != null ? count : 0;
+  }
 }
 
 

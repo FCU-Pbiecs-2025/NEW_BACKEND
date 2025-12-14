@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -169,6 +170,7 @@ public class EmailService {
      * @param currentOrder 目前序號（可為 null）
      * @param reason 備註說明（可為 null）
      */
+    @Async
     public void sendApplicationStatusChangeEmail(
             String toEmail,
             String applicantName,
@@ -284,7 +286,7 @@ public class EmailService {
         html.append("        </div>\n");
         html.append("        <div class=\"summary-row\">\n");
         html.append("          <div class=\"summary-label\">案件編號：</div>\n");
-        html.append("          <div class=\"summary-value\">").append(caseNumber).append("</div>\n");
+        html.append("          <div class=\"summary-value\">").append(caseNumber != null ? caseNumber : "待分配").append("</div>\n");
         html.append("        </div>\n");
         html.append("        <div class=\"summary-row\">\n");
         html.append("          <div class=\"summary-label\">申請日期：</div>\n");

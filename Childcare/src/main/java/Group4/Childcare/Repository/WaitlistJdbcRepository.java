@@ -133,10 +133,13 @@ public class WaitlistJdbcRepository {
      * 獲取抽籤時期的所有申請人（按身分別分組）
      */
     public Map<Integer, List<Map<String, Object>>> getLotteryApplicantsByPriority(UUID institutionId) {
-        String sql = "SELECT ap.ApplicationID, ap.NationalID, ap.Name, ap.BirthDate, " +
-                "ap.CurrentOrder, ap.Status, a.IdentityType, ap.ClassID " +
+        String sql = "SELECT ap.ApplicationID, ap.NationalID, ap.Name, ap.Name AS ChildName, " +
+                "ap.BirthDate, ap.CurrentOrder, ap.Status, a.IdentityType, ap.ClassID, " +
+                "u.Email, u.Name AS ApplicantName, i.InstitutionName, a.CaseNumber, a.ApplicationDate " +
                 "FROM application_participants ap " +
                 "LEFT JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
+                "LEFT JOIN users u ON a.UserID = u.UserID " +
+                "LEFT JOIN institutions i ON a.InstitutionID = i.InstitutionID " +
                 "WHERE a.InstitutionID = ? AND ap.ParticipantType = 0 " +
                 "AND ap.Status = '候補中' " +
                 "ORDER BY a.IdentityType, ap.CurrentOrder";

@@ -643,14 +643,31 @@ public class ApplicationsController {
             if (caseDto.getChildren() != null) {
                 System.out.println("  Total children to save: " + caseDto.getChildren().size());
 
-                // 🔍 檢查每個幼兒的 nationalID 總案件數是否超過 2 件
+                // 🔍 檢查每個幼兒的申請限制
+                // 規則：
+                // 1. 如果「已錄取」狀態有 1 件或以上 → 不能再申請
+                // 2. 「審核中」+「需要補件」+「候補中」+「撤銷申請審核中」總共不得大於 2 件
                 for (ApplicationParticipantDTO childDto : caseDto.getChildren()) {
                     if (childDto.nationalID != null && !childDto.nationalID.trim().isEmpty()) {
-                        int existingCount = applicationParticipantsService.countApplicationsByChildNationalID(childDto.nationalID);
-                        System.out.println("  🔍 幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 目前已有 " + existingCount + " 件申請");
+                        // 檢查「已錄取」案件數
+                        int acceptedCount = service.countAcceptedApplicationsByChildNationalID(childDto.nationalID);
+                        System.out.println("  🔍 幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ")");
+                        System.out.println("     - 已錄取案件數: " + acceptedCount);
 
-                        if (existingCount >= 2) {
-                            String errorMsg = "幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 的申請案件已達上限 2 件，無法再提交新申請";
+                        // 規則 1：如果已有「已錄取」案件，不能再申請
+                        if (acceptedCount >= 1) {
+                            String errorMsg = "幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 已有錄取案件，無法再提交新申請";
+                            System.err.println("  ❌ " + errorMsg);
+                            return ResponseEntity.status(400).body(errorMsg);
+                        }
+
+                        // 檢查「審核中+需要補件+候補中+撤銷申請審核中」案件數
+                        int pendingCount = service.countPendingApplicationsByChildNationalID(childDto.nationalID);
+                        System.out.println("     - 處理中案件數 (審核中+需要補件+候補中+撤銷申請審核中): " + pendingCount);
+
+                        // 規則 2：處理中案件不得超過 2 件
+                        if (pendingCount >= 2) {
+                            String errorMsg = "幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 的處理中申請案件已達上限 2 件，無法再提交新申請";
                             System.err.println("  ❌ " + errorMsg);
                             return ResponseEntity.status(400).body(errorMsg);
                         }

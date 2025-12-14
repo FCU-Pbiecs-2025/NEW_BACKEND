@@ -246,9 +246,10 @@ public class WaitlistController {
             allUpdates.addAll(allWaitlist);       // 所有候補者（有 CurrentOrder）
             waitlistJdbcRepository.batchUpdateApplicants(allUpdates);
 
-            // 8.5. 發送郵件通知錄取者
+            // 8.5. 非同步發送郵件通知（不會阻塞回應）
+            System.out.println("📧 啟動非同步郵件發送流程...");
             sendLotteryNotificationEmails(acceptedList, allWaitlist);
-
+            System.out.println("✅ 抽籤完成，郵件將在背景發送");
             // 9. 返回結果
             LotteryResult result = new LotteryResult();
             result.setSuccess(true);
@@ -517,7 +518,8 @@ public class WaitlistController {
                 String applicantName = (String) applicant.get("ApplicantName");
                 String childName = (String) applicant.get("ChildName");
                 String institutionName = (String) applicant.get("InstitutionName");
-                Long caseNumber = ((Number) applicant.get("CaseNumber")).longValue();
+                Object caseNumberObj = applicant.get("CaseNumber");
+                Long caseNumber = caseNumberObj != null ? ((Number) caseNumberObj).longValue() : null;
                 String status = (String) applicant.get("Status");
                 String reason = (String) applicant.get("Reason");
 
@@ -545,14 +547,11 @@ public class WaitlistController {
                         reason
                     );
                     successCount++;
-                    System.out.println("  ✅ 已發送錄取通知給: " + applicantName + " (" + email + ")");
+                    System.out.println("  ✅ 已排程發送錄取通知給: " + applicantName + " (" + email + ")");
                 } else {
                     System.out.println("  ⚠️ 無法發送郵件給: " + applicantName + " (無 Email)");
                     failCount++;
                 }
-            } catch (MessagingException e) {
-                System.err.println("  ❌ 發送郵件失敗: " + e.getMessage());
-                failCount++;
             } catch (Exception e) {
                 System.err.println("  ❌ 處理申請人資料時發生錯誤: " + e.getMessage());
                 failCount++;
@@ -566,7 +565,8 @@ public class WaitlistController {
                 String applicantName = (String) applicant.get("ApplicantName");
                 String childName = (String) applicant.get("ChildName");
                 String institutionName = (String) applicant.get("InstitutionName");
-                Long caseNumber = ((Number) applicant.get("CaseNumber")).longValue();
+                Object caseNumberObj = applicant.get("CaseNumber");
+                Long caseNumber = caseNumberObj != null ? ((Number) caseNumberObj).longValue() : null;
                 String status = (String) applicant.get("Status");
                 Integer currentOrder = (Integer) applicant.get("CurrentOrder");
 

@@ -201,5 +201,9 @@ public class ApplicationParticipantsJdbcRepository {
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class, nationalID);
         return count != null ? count : 0;
     }
+
+
+
 }
+
 
