@@ -106,6 +106,7 @@ public class ClassesJdbcRepository {
         } else {
             dto.setCurrentStudents(null);
         }
+        dto.setAdditionalInfo(rs.getString("AdditionalInfo"));
         dto.setInstitutionName(rs.getString("InstitutionName"));
         String institutionIdStr = rs.getString("InstitutionID");
         if (institutionIdStr != null) {
@@ -194,7 +195,7 @@ public class ClassesJdbcRepository {
 
     // Find all with institution name using LEFT JOIN
     public List<ClassSummaryDTO> findAllWithInstitutionName() {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription,c.CurrentStudents, i.InstitutionName, i.InstitutionID " +
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
                      "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER);
     }
@@ -237,7 +238,7 @@ public class ClassesJdbcRepository {
 
     // 使用offset分頁查詢，包含機構名稱 - 一次取指定筆數
     public List<ClassSummaryDTO> findWithOffsetAndInstitutionName(int offset, int limit) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription,c.CurrentStudents, i.InstitutionName, i.InstitutionID " +
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
                      "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
                      "ORDER BY c.ClassID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER, offset, limit);
@@ -251,7 +252,7 @@ public class ClassesJdbcRepository {
      * @return 班級列表
      */
     public List<ClassSummaryDTO> findWithOffsetAndInstitutionNameByInstitutionID(int offset, int limit, UUID institutionID) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription,c.CurrentStudents, i.InstitutionName, i.InstitutionID " +
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
                      "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
                      "WHERE c.InstitutionID = ? " +
                      "ORDER BY c.ClassID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
@@ -336,7 +337,7 @@ public class ClassesJdbcRepository {
      * @return List<ClassSummaryDTO>
      */
     public List<ClassSummaryDTO> findClassesByInstitutionName(String institutionName) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, i.InstitutionName, i.InstitutionID " +
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
                      "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
                      "WHERE i.InstitutionName LIKE ? " +
                      "ORDER BY i.InstitutionName, c.ClassName";
@@ -353,5 +354,39 @@ public class ClassesJdbcRepository {
                      "WHERE c.InstitutionID = ? " +
                      "ORDER BY c.ClassName";
         return jdbcTemplate.query(sql, CLASS_NAME_ROW_MAPPER, institutionId.toString());
+    }
+
+    /**
+     * 增加班級當前學生數（原子性，若已滿則不會更新）
+     */
+    public boolean incrementCurrentStudents(UUID classId) {
+        String sql = "UPDATE " + TABLE_NAME + " SET CurrentStudents = COALESCE(CurrentStudents, 0) + 1 " +
+                     "WHERE ClassID = ? AND (Capacity IS NULL OR COALESCE(CurrentStudents, 0) < Capacity)";
+        int rowsAffected = jdbcTemplate.update(sql, classId.toString());
+        return rowsAffected > 0;
+    }
+
+    /**
+     * 減少班級當前學生數（避免負值）
+     */
+    public boolean decrementCurrentStudents(UUID classId) {
+        String sql = "UPDATE " + TABLE_NAME + " SET CurrentStudents = CASE WHEN COALESCE(CurrentStudents,0) > 0 THEN COALESCE(CurrentStudents,0) - 1 ELSE 0 END " +
+                     "WHERE ClassID = ?";
+        int rowsAffected = jdbcTemplate.update(sql, classId.toString());
+        return rowsAffected > 0;
+    }
+
+    /**
+     * 檢查班級是否已滿（以 Capacity 為上限）
+     */
+    public boolean isClassFull(UUID classId) {
+        String sql = "SELECT CASE WHEN Capacity IS NOT NULL AND COALESCE(CurrentStudents,0) >= Capacity THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END " +
+                     "FROM " + TABLE_NAME + " WHERE ClassID = ?";
+        try {
+            Boolean isFull = jdbcTemplate.queryForObject(sql, Boolean.class, classId.toString());
+            return isFull != null && isFull;
+        } catch (Exception e) {
+            return true; // 如果查詢失敗，保守處理，視為已滿
+        }
     }
 }

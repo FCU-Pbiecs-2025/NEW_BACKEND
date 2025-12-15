@@ -218,4 +218,78 @@ public class BannersJdbcRepository {
         Timestamp now = new Timestamp(System.currentTimeMillis());
         return jdbcTemplate.update(sql, now);
     }
+
+    /**
+     * 按日期範圍查詢 banners（分頁）
+     * @param startDate 開始日期（可為 null）
+     * @param endDate 結束日期（可為 null）
+     * @param offset 偏移量
+     * @param limit 每頁筆數
+     * @return 符合條件的 banners 列表
+     */
+    public List<Banners> findByDateRangeWithOffset(Timestamp startDate, Timestamp endDate, int offset, int limit) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM " + TABLE_NAME + " WHERE 1=1");
+
+        if (startDate != null) {
+            sql.append(" AND StartTime >= ?");
+        }
+        if (endDate != null) {
+            sql.append(" AND StartTime <= ?");
+        }
+
+        sql.append(" ORDER BY SortOrder OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
+
+        return jdbcTemplate.query(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql.toString());
+            int paramIndex = 1;
+
+            if (startDate != null) {
+                ps.setTimestamp(paramIndex++, startDate);
+            }
+            if (endDate != null) {
+                ps.setTimestamp(paramIndex++, endDate);
+            }
+
+            ps.setInt(paramIndex++, offset);
+            ps.setInt(paramIndex, limit);
+
+            return ps;
+        }, BANNERS_ROW_MAPPER);
+    }
+
+    /**
+     * 計算符合日期範圍條件的 banners 總數
+     * @param startDate 開始日期（可為 null）
+     * @param endDate 結束日期（可為 null）
+     * @return 符合條件的總筆數
+     */
+    public long countByDateRange(Timestamp startDate, Timestamp endDate) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE 1=1");
+
+        if (startDate != null) {
+            sql.append(" AND StartTime >= ?");
+        }
+        if (endDate != null) {
+            sql.append(" AND StartTime <= ?");
+        }
+
+        return jdbcTemplate.query(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql.toString());
+            int paramIndex = 1;
+
+            if (startDate != null) {
+                ps.setTimestamp(paramIndex++, startDate);
+            }
+            if (endDate != null) {
+                ps.setTimestamp(paramIndex, endDate);
+            }
+
+            return ps;
+        }, rs -> {
+            if (rs.next()) {
+                return rs.getLong(1);
+            }
+            return 0L;
+        });
+    }
 }

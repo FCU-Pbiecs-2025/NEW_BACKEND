@@ -154,6 +154,136 @@ public class UsersController {
     }
 
     /**
+     * GET  /users/search
+     * 範例資料:
+     * {
+     *     "offset": 0,
+     *     "size": 10,
+     *     "totalPages": 1,
+     *     "hasNext": false,
+     *     "content": [
+     *         {
+     *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     *             "account": "inst001",
+     *             "institutionName": "小天使托嬰中心",
+     *             "permissionType": 2,
+     *             "accountStatus": 1
+     *         }
+     *     ],
+     *     "totalElements": 1
+     * }
+     * 以帳號模糊查詢使用者列表（支援分頁）
+     *
+     * @param account 帳號關鍵字
+     * @param offset 起始位置
+     * @param size   頁面大小
+     * @return 分頁使用者列表及分頁資訊
+     **/
+    @GetMapping("/search2")
+    public ResponseEntity<Map<String, Object>> searchUsersByAccount(
+            @RequestParam String account,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            if (account == null || account.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "查詢帳號不能為空"));
+            }
+
+            if (offset < 0 || size <= 0) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid offset/size"));
+            }
+
+            final int MAX_SIZE = 100;
+            if (size > MAX_SIZE) size = MAX_SIZE;
+
+            String searchKeyword = account.trim();
+            List<UserSummaryDTO> users = usersService.searchUsersByAccountWithOffset(searchKeyword, offset, size);
+            long totalCount = usersService.getSearchTotalCount(searchKeyword);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("content", users);
+            response.put("offset", offset);
+            response.put("size", size);
+            response.put("totalElements", totalCount);
+            response.put("totalPages", (int) Math.ceil((double) totalCount / size));
+            response.put("hasNext", offset + size < totalCount);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("Error in searchUsersByAccount: " + e.getMessage());
+            e.printStackTrace();
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Internal server error");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    /**
+     * GET  /users/SEARCH3
+     * 範例資料:
+     * {
+     *     "offset": 0,
+     *     "size": 10,
+     *     "totalPages": 1,
+     *     "hasNext": false,
+     *     "content": [
+     *         {
+     *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     *             "account": "citizen001",
+     *             "institutionName": null,
+     *             "permissionType": 3,
+     *             "accountStatus": 1
+     *         }
+     *     ],
+     *     "totalElements": 1
+     * }
+     * 以帳號模糊查詢民眾帳號列表 (permissionType = 3)（支援分頁）
+     *
+     * @param account 帳號關鍵字
+     * @param offset 起始位置
+     * @param size   頁面大小
+     * @return 分頁民眾帳號列表及分頁資訊
+     **/
+    @GetMapping("/SEARCH3")
+    public ResponseEntity<Map<String, Object>> searchCitizenUsersByAccount(
+            @RequestParam(required = false, defaultValue = "") String account,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            if (offset < 0 || size <= 0) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid offset/size"));
+            }
+
+            final int MAX_SIZE = 100;
+            if (size > MAX_SIZE) size = MAX_SIZE;
+
+            String searchKeyword = account != null ? account.trim() : "";
+            List<UserSummaryDTO> users = usersService.searchCitizenUsersByAccountWithOffset(searchKeyword, offset, size);
+            long totalCount = usersService.getSearchCitizenTotalCount(searchKeyword);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("content", users);
+            response.put("offset", offset);
+            response.put("size", size);
+            response.put("totalElements", totalCount);
+            response.put("totalPages", (int) Math.ceil((double) totalCount / size));
+            response.put("hasNext", offset + size < totalCount);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("Error in searchCitizenUsersByAccount: " + e.getMessage());
+            e.printStackTrace();
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Internal server error");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    /**
      * PUT /users/{id}
      * body 範例資料:
      * {

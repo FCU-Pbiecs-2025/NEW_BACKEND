@@ -400,4 +400,68 @@ public class UserJdbcRepository {
             searchPattern, searchPattern, searchPattern, searchPattern);
         return count != null ? count : 0;
     }
+
+    /**
+     * 以帳號模糊查詢使用者，支援分頁
+     * @param account 帳號關鍵字
+     * @param offset 起始位置
+     * @param limit 分頁大小
+     * @return 符合條件的使用者列表
+     */
+    public List<Group4.Childcare.DTO.UserSummaryDTO> searchUsersByAccountWithOffset(String account, int offset, int limit) {
+        String sql = "SELECT u.UserID, u.Account, u.PermissionType, u.AccountStatus, i.InstitutionName " +
+                     "FROM " + TABLE_NAME + " u LEFT JOIN institutions i ON u.InstitutionID = i.InstitutionID " +
+                     "WHERE u.Account LIKE ? AND u.PermissionType = 2 " +
+                     "ORDER BY u.UserID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        String searchPattern = "%" + account + "%";
+        return jdbcTemplate.query(sql, USER_SUMMARY_ROW_MAPPER, searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算帳號模糊查詢的總筆數
+     * @param account 帳號關鍵字
+     * @return 符合條件的總筆數
+     */
+    public long countSearchUsersByAccount(String account) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " u LEFT JOIN institutions i ON u.InstitutionID = i.InstitutionID " +
+                     "WHERE u.Account LIKE ? AND u.PermissionType = 2";
+
+        String searchPattern = "%" + account + "%";
+
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, searchPattern);
+        return count != null ? count : 0;
+    }
+
+    /**
+     * 以帳號模糊查詢民眾帳號 (permissionType = 3)，支援分頁
+     * @param account 帳號關鍵字
+     * @param offset 起始位置
+     * @param limit 分頁大小
+     * @return 符合條件的民眾帳號列表
+     */
+    public List<Group4.Childcare.DTO.UserSummaryDTO> searchCitizenUsersByAccountWithOffset(String account, int offset, int limit) {
+        String sql = "SELECT u.UserID, u.Account, u.PermissionType, u.AccountStatus, i.InstitutionName " +
+                     "FROM " + TABLE_NAME + " u LEFT JOIN institutions i ON u.InstitutionID = i.InstitutionID " +
+                     "WHERE u.Account LIKE ? AND u.PermissionType = 3 " +
+                     "ORDER BY u.UserID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        String searchPattern = "%" + account + "%";
+        return jdbcTemplate.query(sql, USER_SUMMARY_ROW_MAPPER, searchPattern, offset, limit);
+    }
+
+    /**
+     * 計算民眾帳號模糊查詢的總筆數 (permissionType = 3)
+     * @param account 帳號關鍵字
+     * @return 符合條件的總筆數
+     */
+    public long countSearchCitizenUsersByAccount(String account) {
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " u LEFT JOIN institutions i ON u.InstitutionID = i.InstitutionID " +
+                     "WHERE u.Account LIKE ? AND u.PermissionType = 3";
+
+        String searchPattern = "%" + account + "%";
+
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, searchPattern);
+        return count != null ? count : 0;
+    }
 }

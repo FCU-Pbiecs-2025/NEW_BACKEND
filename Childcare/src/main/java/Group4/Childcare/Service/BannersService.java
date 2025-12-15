@@ -61,4 +61,26 @@ public class BannersService {
         int updated = repository.updateExpiredBanners();
 
     }
+
+    /**
+     * 按日期範圍查詢 banners（分頁）
+     * @param startDate 開始日期（可為 null）
+     * @param endDate 結束日期（可為 null）
+     * @param offset 偏移量
+     * @param limit 每頁筆數
+     * @return 符合條件的 banners 列表
+     */
+    public List<Banners> getBannersByDateRange(java.sql.Timestamp startDate, java.sql.Timestamp endDate, int offset, int limit) {
+        return repository.findByDateRangeWithOffset(startDate, endDate, offset, limit);
+    }
+
+    /**
+     * 計算符合日期範圍條件的 banners 總數
+     * @param startDate 開始日期（可為 null）
+     * @param endDate 結束日期（可為 null）
+     * @return 符合條件的總筆數
+     */
+    public long getCountByDateRange(java.sql.Timestamp startDate, java.sql.Timestamp endDate) {
+        return repository.countByDateRange(startDate, endDate);
+    }
 }

@@ -184,6 +184,44 @@ public class UsersService {
         }
 
     /**
+     * 以帳號模糊查詢使用者，支援分頁
+     * @param account 帳號關鍵字
+     * @param offset 起始位置
+     * @param size 分頁大小
+     * @return 符合條件的使用者列表
+     */
+    public List<UserSummaryDTO> searchUsersByAccountWithOffset(String account, int offset, int size) {
+        try {
+            if (account == null || account.trim().isEmpty()) {
+                return getUsersWithOffsetAndInstitutionNameJdbc(offset, size);
+            }
+            return repository.searchUsersByAccountWithOffset(account.trim(), offset, size);
+        } catch (Exception e) {
+            System.err.println("Error in searchUsersByAccountWithOffset: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to search users by account with offset", e);
+        }
+    }
+
+    /**
+     * 計算帳號模糊查詢的總筆數
+     * @param account 帳號關鍵字
+     * @return 符合條件的總筆數
+     */
+    public long getSearchTotalCount(String account) {
+        try {
+            if (account == null || account.trim().isEmpty()) {
+                return getTotalCount();
+            }
+            return repository.countSearchUsersByAccount(account.trim());
+        } catch (Exception e) {
+            System.err.println("Error in getSearchTotalCount: " + e.getMessage());
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    /**
      * 檢查帳號是否已存在
      * @param account 帳號
      * @return true 表示帳號已存在，false 表示帳號可用
@@ -218,6 +256,46 @@ public class UsersService {
             System.err.println("Error in isEmailExists: " + e.getMessage());
             e.printStackTrace();
             return false;
+        }
+    }
+
+    /**
+     * 以帳號模糊查詢民眾帳號 (permissionType = 3)，支援分頁
+     * @param account 帳號關鍵字
+     * @param offset 起始位置
+     * @param size 分頁大小
+     * @return 符合條件的民眾帳號列表
+     */
+    public List<UserSummaryDTO> searchCitizenUsersByAccountWithOffset(String account, int offset, int size) {
+        try {
+            if (account == null || account.trim().isEmpty()) {
+                // 如果帳號關鍵字為空，返回所有民眾帳號
+                return repository.searchCitizenUsersByAccountWithOffset("", offset, size);
+            }
+            return repository.searchCitizenUsersByAccountWithOffset(account.trim(), offset, size);
+        } catch (Exception e) {
+            System.err.println("Error in searchCitizenUsersByAccountWithOffset: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to search citizen users by account with offset", e);
+        }
+    }
+
+    /**
+     * 計算民眾帳號模糊查詢的總筆數 (permissionType = 3)
+     * @param account 帳號關鍵字
+     * @return 符合條件的總筆數
+     */
+    public long getSearchCitizenTotalCount(String account) {
+        try {
+            if (account == null || account.trim().isEmpty()) {
+                // 如果帳號關鍵字為空，返回所有民眾帳號的總數
+                return repository.countSearchCitizenUsersByAccount("");
+            }
+            return repository.countSearchCitizenUsersByAccount(account.trim());
+        } catch (Exception e) {
+            System.err.println("Error in getSearchCitizenTotalCount: " + e.getMessage());
+            e.printStackTrace();
+            return 0;
         }
     }
 }

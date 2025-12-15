@@ -233,4 +233,43 @@ public class BannersController {
     public List<Banners> getActiveBanners() {
         return service.findActiveBanners();
     }
+
+    // 按日期範圍查詢 banners（分頁）
+    @GetMapping("/query")
+    public ResponseEntity<Map<String, Object>> queryBannersByDateRange(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int size) {
+
+        java.sql.Timestamp startTimestamp = null;
+        java.sql.Timestamp endTimestamp = null;
+
+        try {
+            // 解析日期字串為 Timestamp（格式：yyyy-MM-dd）
+            if (startDate != null && !startDate.trim().isEmpty()) {
+                startTimestamp = java.sql.Timestamp.valueOf(startDate + " 00:00:00");
+            }
+            if (endDate != null && !endDate.trim().isEmpty()) {
+                endTimestamp = java.sql.Timestamp.valueOf(endDate + " 23:59:59");
+            }
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "日期格式錯誤，請使用 yyyy-MM-dd 格式");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        List<Banners> banners = service.getBannersByDateRange(startTimestamp, endTimestamp, offset, size);
+        long totalCount = service.getCountByDateRange(startTimestamp, endTimestamp);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", banners);
+        response.put("offset", offset);
+        response.put("size", size);
+        response.put("totalElements", totalCount);
+        response.put("totalPages", (int) Math.ceil((double) totalCount / size));
+        response.put("hasNext", offset + size < totalCount);
+
+        return ResponseEntity.ok(response);
+    }
 }

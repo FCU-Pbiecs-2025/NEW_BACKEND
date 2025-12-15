@@ -147,7 +147,7 @@ public class ClassesService {
     /**
      * 依機構名稱模糊搜尋班級，回傳 ClassSummaryDTO 列表
      * @param institutionName 機構名稱關鍵字
-     * @return ClassSummaryDTO 列表
+     * @return List<ClassSummaryDTO> 列表
      */
     public List<ClassSummaryDTO> searchClassesByInstitutionName(String institutionName) {
         return repository.findClassesByInstitutionName(institutionName);
@@ -160,5 +160,35 @@ public class ClassesService {
      */
     public List<ClassNameDTO> getClassNamesByInstitutionId(UUID institutionId) {
         return repository.findClassNamesByInstitutionId(institutionId);
+    }
+
+    /**
+     * 增加班級當前學生數
+     * @param classId 班級ID (UUID)
+     * @return 是否成功
+     */
+    public boolean incrementCurrentStudents(UUID classId) {
+        if (repository.isClassFull(classId)) {
+            throw new RuntimeException("班級已滿，無法增加學生");
+        }
+        return repository.incrementCurrentStudents(classId);
+    }
+
+    /**
+     * 減少班級當前學生數
+     * @param classId 班級ID (UUID)
+     * @return 是否成功
+     */
+    public boolean decrementCurrentStudents(UUID classId) {
+        return repository.decrementCurrentStudents(classId);
+    }
+
+    /**
+     * 檢查班級是否已滿
+     * @param classId 班級ID (UUID)
+     * @return 是否已滿
+     */
+    public boolean isClassFull(UUID classId) {
+        return repository.isClassFull(classId);
     }
 }
