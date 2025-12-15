@@ -15,19 +15,19 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserFamilyInfoDTO {
-  private UUID userID;
-  private Byte accountStatus;
-  private Byte permissionType;
-  private String name;
-  private Boolean gender;
-  private String phoneNumber;
-  private String mailingAddress;
-  private String email;
-  private LocalDate birthDate;
-  private UUID familyInfoID;
-  private UUID institutionID;
-  private String nationalID;
-  private List<ParentInfo> Parents;
-  private List<ChildInfo> Children;
+    private UUID userID;
+    private Byte accountStatus;
+    private Byte permissionType;
+    private String name;
+    private Boolean gender;
+    private String phoneNumber;
+    private String mailingAddress;
+    private String email;
+    private LocalDate birthDate;
+    private UUID familyInfoID;
+    private UUID institutionID;
+    private String nationalID;
+    private List<ParentInfo> Parents;
+    private List<ChildInfo> Children;
 
 }

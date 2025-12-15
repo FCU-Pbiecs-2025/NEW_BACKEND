@@ -77,6 +77,32 @@ public class UserJdbcRepository {
         }
     };
 
+    // Helper: check if account exists
+    public boolean existsByAccount(String account) {
+        if (account == null || account.trim().isEmpty()) return false;
+        try {
+            String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE Account = ?";
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, account.trim());
+            return count != null && count > 0;
+        } catch (Exception e) {
+            System.err.println("Error checking existsByAccount: " + e.getMessage());
+            return false; // fail-safe: don't block insert due to check error
+        }
+    }
+
+    // Helper: check if email exists
+    public boolean existsByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) return false;
+        try {
+            String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE Email = ?";
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, email.trim());
+            return count != null && count > 0;
+        } catch (Exception e) {
+            System.err.println("Error checking existsByEmail: " + e.getMessage());
+            return false; // fail-safe
+        }
+    }
+
     // Save method (Insert or Update)
     public Users save(Users user) {
         if (user == null) {
@@ -114,6 +140,14 @@ public class UserJdbcRepository {
 
     // Insert method
     private Users insert(Users user) {
+        // Defensive duplicate checks before insert
+        if (existsByAccount(user.getAccount())) {
+            throw new RuntimeException("已有相同帳號存在: " + user.getAccount());
+        }
+        if (user.getEmail() != null && existsByEmail(user.getEmail())) {
+            throw new RuntimeException("已有相同Email註冊: " + user.getEmail());
+        }
+
         String sql = "INSERT INTO " + TABLE_NAME +
                     " (UserID, Account, Password, AccountStatus, PermissionType, Name, Gender, " +
                     "PhoneNumber, MailingAddress, Email, BirthDate, FamilyInfoID, InstitutionID, NationalID) " +
@@ -305,11 +339,7 @@ public class UserJdbcRepository {
         }
     }
 
-    /**
-     * 根據 Email 查詢使用者
-     * @param email 使用者 Email
-     * @return 使用者資料
-     */
+    // Custom method: Find by Email
     public Optional<Users> findByEmail(String email) {
         String sql = "SELECT * FROM " + TABLE_NAME + " WHERE Email = ?";
         try {
