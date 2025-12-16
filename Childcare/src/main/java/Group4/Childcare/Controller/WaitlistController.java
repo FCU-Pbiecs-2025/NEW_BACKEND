@@ -43,7 +43,7 @@ public class WaitlistController {
      * POST /waitlist/lottery
      */
     @PostMapping("/lottery")
-    @PreAuthorize("hasRole('ADMIN')")
+    //@PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public ResponseEntity<LotteryResult> conductLottery(@RequestBody LotteryRequest request) {
         try {

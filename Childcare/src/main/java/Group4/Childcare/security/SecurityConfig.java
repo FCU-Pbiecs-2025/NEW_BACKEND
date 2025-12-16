@@ -30,13 +30,13 @@ public class SecurityConfig {
                 //.requestMatchers("/users/users-familyInfo/**").authenticated()
 
                 // API 3 & 5: 更新審核申請狀態與個案管理狀態 (需登入，角色由 @PreAuthorize 控制)
-                .requestMatchers("/application-participants/**").authenticated()
+//                .requestMatchers("/application-participants/**").authenticated()
 
                 // API 4.1: 更新撤銷確認日期 (需登入，角色由 @PreAuthorize 控制)
-                .requestMatchers("/revoke/confirm-date").authenticated()
+//                .requestMatchers("/revoke/confirm-date").authenticated()
 
                 // API 6: 執行候補抽籤 (需登入，角色由 @PreAuthorize 控制)
-                .requestMatchers("/waitlist/lottery").authenticated()
+//                .requestMatchers("/waitlist/lottery").authenticated()
 
                 // 其餘所有請求: 不需要 JWT
                 .anyRequest().permitAll()
