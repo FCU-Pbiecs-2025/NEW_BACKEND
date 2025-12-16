@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,9 @@ public class PasswordResetService {
 
   @Autowired(required = false)
   private JavaMailSender mailSender;
+
+  @Autowired
+  private PasswordEncoder passwordEncoder;
 
   @Value("${app.frontend.url:http://localhost:5173}")
   private String frontendUrl;
@@ -277,7 +281,9 @@ public class PasswordResetService {
     }
 
     Users user = userOpt.get();
-    user.setPassword(newPassword); // 實際環境應該加密
+    // 對新密碼進行 BCrypt 雜湊處理
+    String encodedPassword = passwordEncoder.encode(newPassword);
+    user.setPassword(encodedPassword);
     userJdbcRepository.save(user);
 
     // 將 token 設為失效並記錄使用時間

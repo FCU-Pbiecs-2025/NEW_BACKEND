@@ -4,6 +4,7 @@ import Group4.Childcare.Model.Users;
 import Group4.Childcare.Repository.UserJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,6 +17,9 @@ public class SimpleLoginController {
 
     @Autowired
     private UserJdbcRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @PostMapping("/Verify")
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> loginRequest) {
@@ -48,8 +52,8 @@ public class SimpleLoginController {
 
         Users user = userOptional.get();
 
-        // 直接比對明文密碼
-        if (!password.equals(user.getPassword())) {
+        // 使用 BCrypt 比對密碼
+        if (!passwordEncoder.matches(password, user.getPassword())) {
             result.put("success", false);
             result.put("message", "密碼錯誤");
             return ResponseEntity.badRequest().body(result);
@@ -125,8 +129,8 @@ public class SimpleLoginController {
 
         Users user = userOptional.get();
 
-        // 直接比對明文密碼
-        if (!password.equals(user.getPassword())) {
+        // 使用 BCrypt 比對密碼
+        if (!passwordEncoder.matches(password, user.getPassword())) {
             result.put("success", false);
             result.put("message", "密碼錯誤");
             return ResponseEntity.badRequest().body(result);

@@ -8,6 +8,7 @@ import Group4.Childcare.Service.ChildInfoService;
 import Group4.Childcare.Service.ParentInfoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,9 @@ public class UsersController {
 
     @Autowired
     private ParentInfoService parentInfoService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @PostMapping
     public ResponseEntity<Users> createUser(@RequestBody Users user) {
@@ -474,7 +478,16 @@ public class UsersController {
 
             // 清理基本字串欄位（trim）
             user.setAccount(user.getAccount().trim());
-            user.setPassword(user.getPassword().trim());
+
+            // 在新增使用者時對密碼進行雜湊處理
+            if (user.getUserID() == null) {
+                String rawPassword = user.getPassword().trim();
+                String encodedPassword = passwordEncoder.encode(rawPassword);
+                user.setPassword(encodedPassword);
+            } else {
+                // 更新時保持原密碼不變，除非明確要修改密碼
+                user.setPassword(user.getPassword().trim());
+            }
 
             if (user.getName() != null) {
                 user.setName(user.getName().trim());
@@ -649,8 +662,9 @@ public class UsersController {
                 return ResponseEntity.status(403).body(result);
             }
 
-            // 更新密碼 (這裡使用明文儲存，實際環境建議使用雜湊)
-            user.setPassword(newPassword.trim());
+            // 對新密碼進行雜湊處理
+            String encodedPassword = passwordEncoder.encode(newPassword.trim());
+            user.setPassword(encodedPassword);
             Users updatedUser = usersService.updateUser(id, user);
 
             result.put("success", true);
