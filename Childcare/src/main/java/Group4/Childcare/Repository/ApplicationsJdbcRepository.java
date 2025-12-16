@@ -1408,10 +1408,12 @@ public class ApplicationsJdbcRepository {
                 }
 
                 // 設置 ParticipantID
+                UUID currentParticipantId = null;
                 try {
                     String participantIdStr = rs.getString("ParticipantID");
                     if (participantIdStr != null && !participantIdStr.isEmpty()) {
-                        p.participantID = UUID.fromString(participantIdStr);
+                        currentParticipantId = UUID.fromString(participantIdStr);
+                        p.participantID = currentParticipantId;
                     }
                 } catch (Exception ex) { p.participantID = null; }
 
@@ -1441,7 +1443,10 @@ public class ApplicationsJdbcRepository {
                 if (isParent != null && isParent) {
                     dto.parents.add(p);
                 } else {
-                    dto.children.add(p);
+                    // 只將「該 participantID 對應的幼兒」加入 children
+                    if (currentParticipantId != null && currentParticipantId.equals(participantID)) {
+                        dto.children.add(p);
+                    }
                 }
             }
 

@@ -229,19 +229,19 @@ public class ClassesController {
      * @param classId 班級ID (UUID)
      * @return ResponseEntity<?> 處理結果
      */
-    @PutMapping("/{classId}/increment-students")
-    public ResponseEntity<?> incrementClassStudents(@PathVariable UUID classId) {
-        try {
-            boolean success = service.incrementCurrentStudents(classId);
-            if (success) {
-                return ResponseEntity.ok(Map.of("message", "學生數增加成功", "success", true));
-            } else {
-                return ResponseEntity.badRequest().body(Map.of("message", "更新失敗", "success", false));
-            }
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage(), "success", false));
-        }
-    }
+//    @PutMapping("/{classId}/increment-students")
+//    public ResponseEntity<?> incrementClassStudents(@PathVariable UUID classId) {
+//        try {
+//            boolean success = service.incrementCurrentStudents(classId);
+//            if (success) {
+//                return ResponseEntity.ok(Map.of("message", "學生數增加成功", "success", true));
+//            } else {
+//                return ResponseEntity.badRequest().body(Map.of("message", "更新失敗", "success", false));
+//            }
+//        } catch (RuntimeException e) {
+//            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage(), "success", false));
+//        }
+//    }
 
     /**
      * 減少班級當前學生數 (退學或撤銷錄取時調用)

@@ -220,6 +220,9 @@ public class ApplicationParticipantsService {
             }
         }
 
+        // 🎓 更新班級學生數（如果狀態在「已錄取」與「非已錄取」之間轉換）
+        updateClassStudentCount(applicationID, nationalID, oldStatus, status, classID);
+
         // 查詢並返回更新後的參與者
         List<ApplicationParticipants> participants = repository.findByApplicationIDAndNationalID(applicationID, nationalID);
         if (!participants.isEmpty()) {
@@ -328,10 +331,11 @@ public class ApplicationParticipantsService {
         System.out.println("[DEBUG cancelApplicationWithOrderRecalculation] ApplicationID: " + applicationID +
                          ", NationalID: " + nationalID);
 
-        // 1. 查詢該參與者的當前 CurrentOrder 和 ParticipantType
-        String getCurrentInfoSql = "SELECT CurrentOrder, ParticipantType FROM application_participants WHERE ApplicationID = ? AND NationalID = ?";
+        // 1. 查詢該參與者的當前 CurrentOrder、ParticipantType 和 Status
+        String getCurrentInfoSql = "SELECT CurrentOrder, ParticipantType, Status FROM application_participants WHERE ApplicationID = ? AND NationalID = ?";
         Integer currentOrder = null;
         Boolean isChild = null;
+        String oldStatus = null;
 
         try {
             java.util.Map<String, Object> currentInfo = jdbcTemplate.queryForMap(getCurrentInfoSql, applicationID.toString(), nationalID);
@@ -347,8 +351,9 @@ public class ApplicationParticipantsService {
                     isChild = ((Number) participantTypeObj).intValue() == 0;
                 }
             }
+            oldStatus = (String) currentInfo.get("Status");
 
-            System.out.println("[DEBUG] 查詢當前資料 - CurrentOrder: " + currentOrder + ", isChild: " + isChild);
+            System.out.println("[DEBUG] 查詢當前資料 - CurrentOrder: " + currentOrder + ", isChild: " + isChild + ", 舊狀態: " + oldStatus);
         } catch (Exception ex) {
             System.out.println("[ERROR] 無法查詢當前資料: " + ex.getMessage());
             throw new RuntimeException("無法查詢申請案資料: " + ex.getMessage());
@@ -409,6 +414,9 @@ public class ApplicationParticipantsService {
             throw new RuntimeException("撤銷申請案失敗: " + ex.getMessage());
         }
 
+        // 🎓 如果原狀態是「已錄取」，需要更新班級學生數（-1）
+        updateClassStudentCount(applicationID, nationalID, oldStatus, "撤銷申請通過", null);
+
         // 4. 查詢並返回更新後的參與者
         List<ApplicationParticipants> participants = repository.findByApplicationIDAndNationalID(applicationID, nationalID);
         if (!participants.isEmpty()) {
@@ -430,6 +438,83 @@ public class ApplicationParticipantsService {
      */
     public int countApplicationsByChildNationalID(String nationalID) {
         return repository.countApplicationsByChildNationalID(nationalID);
+    }
+
+    /**
+     * 更新班級學生數
+     *
+     * 規則：
+     * 1. 從「非已錄取」變為「已錄取」：CurrentStudents + 1
+     * 2. 從「已錄取」變為「非已錄取」：CurrentStudents - 1
+     * 3. 其他情況：不更新
+     *
+     * @param applicationID 申請案ID
+     * @param nationalID 參與者身分證
+     * @param oldStatus 原狀態
+     * @param newStatus 新狀態
+     * @param classID 班級ID（可為null，會從資料庫查詢）
+     */
+    private void updateClassStudentCount(UUID applicationID, String nationalID, String oldStatus, String newStatus, UUID classID) {
+        try {
+            System.out.println("🎓 [updateClassStudentCount] 開始檢查是否需要更新班級學生數");
+            System.out.println("  ApplicationID: " + applicationID);
+            System.out.println("  NationalID: " + nationalID);
+            System.out.println("  舊狀態: " + oldStatus);
+            System.out.println("  新狀態: " + newStatus);
+
+            boolean wasAdmitted = "已錄取".equals(oldStatus);
+            boolean isAdmitted = "已錄取".equals(newStatus);
+
+            // 如果狀態沒有在「已錄取」與「非已錄取」之間轉換，不需要更新
+            if (wasAdmitted == isAdmitted) {
+                System.out.println("  ⏭️ 狀態未在「已錄取」與「非已錄取」之間轉換，不需更新班級學生數");
+                return;
+            }
+
+            // 如果 classID 為 null，從資料庫查詢
+            UUID targetClassID = classID;
+            if (targetClassID == null) {
+                String getClassIDSql = "SELECT ClassID FROM application_participants WHERE ApplicationID = ? AND NationalID = ?";
+                try {
+                    String classIDStr = jdbcTemplate.queryForObject(getClassIDSql, String.class, applicationID.toString(), nationalID);
+                    if (classIDStr != null && !classIDStr.isEmpty()) {
+                        targetClassID = UUID.fromString(classIDStr);
+                    }
+                } catch (Exception ex) {
+                    System.out.println("  ⚠️ 無法查詢 ClassID: " + ex.getMessage());
+                }
+            }
+
+            if (targetClassID == null) {
+                System.out.println("  ⚠️ ClassID 為 null，無法更新班級學生數");
+                return;
+            }
+
+            System.out.println("  ClassID: " + targetClassID);
+
+            // 決定是加1還是減1
+            int delta = 0;
+            if (!wasAdmitted && isAdmitted) {
+                // 從非已錄取 → 已錄取：+1
+                delta = 1;
+                System.out.println("  📈 從「非已錄取」變為「已錄取」，CurrentStudents + 1");
+            } else if (wasAdmitted && !isAdmitted) {
+                // 從已錄取 → 非已錄取：-1
+                delta = -1;
+                System.out.println("  📉 從「已錄取」變為「非已錄取」，CurrentStudents - 1");
+            }
+
+            if (delta != 0) {
+                String updateClassSql = "UPDATE classes SET CurrentStudents = CurrentStudents + ? WHERE ClassID = ?";
+                int rowsAffected = jdbcTemplate.update(updateClassSql, delta, targetClassID.toString());
+                System.out.println("  ✅ 班級學生數更新完成，影響行數: " + rowsAffected);
+            }
+
+        } catch (Exception ex) {
+            System.err.println("  ❌ 更新班級學生數失敗: " + ex.getMessage());
+            ex.printStackTrace();
+            // 不拋出異常，避免影響主流程
+        }
     }
 
 }
