@@ -27,7 +27,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // API 1 & 2: 會員中心家長與幼兒資料 (僅需登入)
-                .requestMatchers("/users/users-familyInfo/**").authenticated()
+                //.requestMatchers("/users/users-familyInfo/**").authenticated()
 
                 // API 3 & 5: 更新審核申請狀態與個案管理狀態 (需登入，角色由 @PreAuthorize 控制)
                 .requestMatchers("/application-participants/**").authenticated()
