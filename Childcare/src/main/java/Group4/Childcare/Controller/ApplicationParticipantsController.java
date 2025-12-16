@@ -64,7 +64,7 @@ public class ApplicationParticipantsController {
      * @return 更新後的參與者資訊
      */
     @PutMapping("/{participantID}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    //@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<?> update(
             @PathVariable UUID participantID,
             @RequestParam(required = false) UUID applicationID,
@@ -117,7 +117,7 @@ public class ApplicationParticipantsController {
      * @return 撤銷結果，包含更新後的參與者資訊和遞補統計
      */
     @PostMapping("/cancel")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    //@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @Transactional
     public ResponseEntity<Map<String, Object>> cancelApplication(@RequestBody Map<String, String> requestBody) {
         Map<String, Object> response = new HashMap<>();
