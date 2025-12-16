@@ -5,6 +5,7 @@ import Group4.Childcare.Service.ApplicationParticipantsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
@@ -63,6 +64,7 @@ public class ApplicationParticipantsController {
      * @return 更新後的參與者資訊
      */
     @PutMapping("/{participantID}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<?> update(
             @PathVariable UUID participantID,
             @RequestParam(required = false) UUID applicationID,
@@ -115,6 +117,7 @@ public class ApplicationParticipantsController {
      * @return 撤銷結果，包含更新後的參與者資訊和遞補統計
      */
     @PostMapping("/cancel")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @Transactional
     public ResponseEntity<Map<String, Object>> cancelApplication(@RequestBody Map<String, String> requestBody) {
         Map<String, Object> response = new HashMap<>();

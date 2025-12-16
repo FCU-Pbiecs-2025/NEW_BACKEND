@@ -11,6 +11,7 @@ import Group4.Childcare.DTO.UpdateConfirmDateRequest;
 import Group4.Childcare.DTO.CreateRevokeRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -138,6 +139,7 @@ public class RevokeController {
 
     // PUT: 更新撤銷聲請的確認日期
     @PutMapping("/confirm-date")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<Object> updateConfirmDate(@RequestBody UpdateConfirmDateRequest req) {
         String cancellationID = req != null ? req.getCancellationID() : null;
         LocalDate confirmDate = req != null ? req.getConfirmDate() : null;
