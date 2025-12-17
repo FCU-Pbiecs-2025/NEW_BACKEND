@@ -152,7 +152,8 @@ class ClassesControllerTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15
+                15,
+                null
         );
         List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
         when(service.getClassesWithOffsetAndInstitutionNameJdbc(offset, size)).thenReturn(classes);
@@ -186,7 +187,8 @@ class ClassesControllerTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15
+                15,
+                null
         );
         List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
         when(service.getClassesWithOffsetAndInstitutionNameByInstitutionID(offset, size, testInstitutionId))
@@ -219,7 +221,8 @@ class ClassesControllerTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15
+                15,
+                null
         );
         List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
         when(service.getAllWithInstitutionName()).thenReturn(classes);

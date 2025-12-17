@@ -54,15 +54,6 @@ public class WaitlistController {
             int currentStudents = waitlistJdbcRepository.getCurrentStudentsCount(institutionId);
             int availableSlots = totalCapacity - currentStudents;
 
-            // 檢查是否有空缺名額
-            if (availableSlots <= 0) {
-                LotteryResult errorResult = new LotteryResult();
-                errorResult.setSuccess(false);
-                errorResult.setMessage(String.format("目前無空缺名額，無法進行抽籤。總容量=%d，就讀中=%d",
-                    totalCapacity, currentStudents));
-                return ResponseEntity.badRequest().body(errorResult);
-            }
-
             // 2. 計算法定序位名額（基於總容量的比例）
             int firstPriorityLegalQuota = (int) Math.floor(totalCapacity * 0.2);
             int secondPriorityLegalQuota = (int) Math.floor(totalCapacity * 0.1);
@@ -75,9 +66,10 @@ public class WaitlistController {
             int thirdPriorityAcceptedCount = acceptedCountByPriority.get(3);
 
             // 4. 計算實際序位名額（法定名額 - 已錄取人數）
-            int firstPriorityQuota = Math.max(0, firstPriorityLegalQuota - firstPriorityAcceptedCount);
-            int secondPriorityQuota = Math.max(0, secondPriorityLegalQuota - secondPriorityAcceptedCount);
-            int thirdPriorityQuota = Math.max(0, thirdPriorityLegalQuota - thirdPriorityAcceptedCount);
+            // 如果名額已滿（availableSlots <= 0），所有quota都設為0，但仍然執行抽籤以打亂CurrentOrder
+            int firstPriorityQuota = availableSlots > 0 ? Math.max(0, firstPriorityLegalQuota - firstPriorityAcceptedCount) : 0;
+            int secondPriorityQuota = availableSlots > 0 ? Math.max(0, secondPriorityLegalQuota - secondPriorityAcceptedCount) : 0;
+            int thirdPriorityQuota = availableSlots > 0 ? Math.max(0, thirdPriorityLegalQuota - thirdPriorityAcceptedCount) : 0;
 
             // 重置所有候補順位（洗牌）- 無論是否有名額都執行
             waitlistJdbcRepository.resetAllWaitlistOrders(institutionId);
@@ -102,11 +94,13 @@ public class WaitlistController {
             List<Map<String, Object>> priority1Selected = new ArrayList<>();
             List<Map<String, Object>> priority1NotSelected = new ArrayList<>();
 
+            // 無論是否有名額，都先洗牌以打亂順序
+            Collections.shuffle(priority1);
+
             if (firstPriorityQuota <= 0) {
-                // 第一序位已滿額，所有申請人併入第二序位池
+                // 第一序位已滿額，所有申請人併入第二序位池（已洗牌）
                 priority1NotSelected.addAll(priority1);
             } else {
-                Collections.shuffle(priority1); // 隨機洗牌
                 if (priority1.size() <= firstPriorityQuota) {
                     // Case A: 全部正取
                     priority1Selected.addAll(priority1);
@@ -130,11 +124,13 @@ public class WaitlistController {
 
             int priority2Available = secondPriorityQuota + (firstPriorityQuota - priority1Selected.size());
 
+            // 無論是否有名額，都先洗牌以打亂順序
+            Collections.shuffle(priority2);
+
             if (priority2Available <= 0) {
-                // 第二序位已滿額，所有申請人併入第三序位池
+                // 第二序位已滿額，所有申請人併入第三序位池（已洗牌）
                 priority2NotSelected.addAll(priority2);
             } else {
-                Collections.shuffle(priority2);
                 if (priority2.size() <= priority2Available) {
                     // Case A: 全部正取
                     priority2Selected.addAll(priority2);
@@ -160,11 +156,13 @@ public class WaitlistController {
                 (firstPriorityQuota - priority1Selected.size()) +
                 (secondPriorityQuota - priority2Selected.size());
 
+            // 無論是否有名額，都先洗牌以打亂順序
+            Collections.shuffle(priority3);
+
             if (priority3Available <= 0) {
-                // 第三序位已滿額，所有申請人成為備取
+                // 第三序位已滿額，所有申請人成為備取（已洗牌）
                 priority3NotSelected.addAll(priority3);
             } else {
-                Collections.shuffle(priority3);
                 if (priority3.size() <= priority3Available) {
                     // Case A: 全部正取
                     priority3Selected.addAll(priority3);
@@ -255,15 +253,26 @@ public class WaitlistController {
             // 9. 返回結果
             LotteryResult result = new LotteryResult();
             result.setSuccess(true);
-            result.setMessage(String.format(
-                "抽籤完成。總容量=%d，就讀中=%d，剩餘空位=%d。" +
-                "法定名額：第一序位=%d（已錄取%d，本次可錄取%d），第二序位=%d（已錄取%d，本次可錄取%d），第三序位=%d（已錄取%d，本次可錄取%d）。" +
-                "本次實際錄取=%d",
-                totalCapacity, currentStudents, availableSlots,
-                firstPriorityLegalQuota, firstPriorityAcceptedCount, firstPriorityQuota,
-                secondPriorityLegalQuota, secondPriorityAcceptedCount, secondPriorityQuota,
-                thirdPriorityLegalQuota, thirdPriorityAcceptedCount, thirdPriorityQuota,
-                acceptedList.size()));
+
+            // 根據是否有空位調整訊息
+            String message;
+            if (availableSlots <= 0) {
+                message = String.format(
+                    "抽籤完成（無空缺名額，已打亂候補順序）。總容量=%d，就讀中=%d，剩餘空位=%d。" +
+                    "所有申請人維持候補狀態，候補人數=%d",
+                    totalCapacity, currentStudents, availableSlots, allWaitlist.size());
+            } else {
+                message = String.format(
+                    "抽籤完成。總容量=%d，就讀中=%d，剩餘空位=%d。" +
+                    "法定名額：第一序位=%d（已錄取%d，本次可錄取%d），第二序位=%d（已錄取%d，本次可錄取%d），第三序位=%d（已錄取%d，本次可錄取%d）。" +
+                    "本次實際錄取=%d",
+                    totalCapacity, currentStudents, availableSlots,
+                    firstPriorityLegalQuota, firstPriorityAcceptedCount, firstPriorityQuota,
+                    secondPriorityLegalQuota, secondPriorityAcceptedCount, secondPriorityQuota,
+                    thirdPriorityLegalQuota, thirdPriorityAcceptedCount, thirdPriorityQuota,
+                    acceptedList.size());
+            }
+            result.setMessage(message);
             result.setTotalProcessed(allUpdates.size());
             result.setFirstPriorityAccepted(firstAccepted);
             result.setSecondPriorityAccepted(secondAccepted);

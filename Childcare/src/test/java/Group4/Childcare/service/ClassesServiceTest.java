@@ -205,7 +205,8 @@ class ClassesServiceTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15
+                15,
+                null
         );
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
         when(repository.findAllWithInstitutionName()).thenReturn(summaryList);
@@ -250,7 +251,8 @@ class ClassesServiceTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15
+                15,
+                null
         );
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
         when(repository.findWithOffsetAndInstitutionName(offset, size)).thenReturn(summaryList);
@@ -278,7 +280,8 @@ class ClassesServiceTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15
+                15,
+                null
         );
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
         when(repository.findWithOffsetAndInstitutionNameByInstitutionID(offset, size, testInstitutionId))
