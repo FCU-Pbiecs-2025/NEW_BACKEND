@@ -2,6 +2,7 @@ package Group4.Childcare.Controller;
 
 import Group4.Childcare.Model.Users;
 import Group4.Childcare.Repository.UserJdbcRepository;
+import Group4.Childcare.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +21,9 @@ public class SimpleLoginController {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @PostMapping("/Verify")
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> loginRequest) {
@@ -74,6 +78,10 @@ public class SimpleLoginController {
 
 
         // 登入成功
+        // ✅ 生成 JWT token
+        String token = jwtUtil.generateToken(user);
+        System.out.println("✅ 用戶登入成功，已生成 JWT token: " + token.substring(0, 50) + "...");
+
         Map<String, Object> userInfo = new HashMap<>();
         // Original (existing) PascalCase keys
         userInfo.put("UserID", user.getUserID() != null ? user.getUserID().toString() : null);
@@ -92,8 +100,10 @@ public class SimpleLoginController {
         userInfo.put("account", user.getAccount());
         userInfo.put("FamilyInfoID", user.getFamilyInfoID());
         userInfo.put("InstitutionID", user.getInstitutionID());
+
         result.put("success", true);
         result.put("message", "登入成功");
+        result.put("token", token);  // ✅ 添加 token 到回應
         result.put("user", userInfo);
 
         return ResponseEntity.ok(result);
@@ -151,6 +161,10 @@ public class SimpleLoginController {
 
 
         // 登入成功
+        // ✅ 生成 JWT token
+        String token = jwtUtil.generateToken(user);
+        System.out.println("✅ 管理員登入成功，已生成 JWT token: " + token.substring(0, 50) + "...");
+
         Map<String, Object> userInfo = new HashMap<>();
         // Original (existing) PascalCase keys
         userInfo.put("UserID", user.getUserID() != null ? user.getUserID().toString() : null);
@@ -169,8 +183,10 @@ public class SimpleLoginController {
         userInfo.put("account", user.getAccount());
         userInfo.put("FamilyInfoID", user.getFamilyInfoID());
         userInfo.put("InstitutionID", user.getInstitutionID());
+
         result.put("success", true);
         result.put("message", "登入成功");
+        result.put("token", token);  // ✅ 添加 token 到回應
         result.put("user", userInfo);
 
         return ResponseEntity.ok(result);

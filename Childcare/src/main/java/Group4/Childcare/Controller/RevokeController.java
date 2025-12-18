@@ -139,7 +139,7 @@ public class RevokeController {
 
     // PUT: 更新撤銷聲請的確認日期
     @PutMapping("/confirm-date")
-    //@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<Object> updateConfirmDate(@RequestBody UpdateConfirmDateRequest req) {
         String cancellationID = req != null ? req.getCancellationID() : null;
         LocalDate confirmDate = req != null ? req.getConfirmDate() : null;
