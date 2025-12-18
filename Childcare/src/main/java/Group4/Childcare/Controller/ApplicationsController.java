@@ -647,6 +647,7 @@ public class ApplicationsController {
                 // 規則：
                 // 1. 如果「已錄取」狀態有 1 件或以上 → 不能再申請
                 // 2. 「審核中」+「需要補件」+「候補中」+「撤銷申請審核中」總共不得大於 2 件
+                // 目前：尚未阻擋「同幼兒+同機構」重複申請，此處只驗證全域（跨機構）。
                 for (ApplicationParticipantDTO childDto : caseDto.getChildren()) {
                     if (childDto.nationalID != null && !childDto.nationalID.trim().isEmpty()) {
                         // 檢查「已錄取」案件數
@@ -668,6 +669,15 @@ public class ApplicationsController {
                         // 規則 2：處理中案件不得超過 2 件
                         if (pendingCount >= 2) {
                             String errorMsg = "幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 的處理中申請案件已達上限 2 件，無法再提交新申請";
+                            System.err.println("  ❌ " + errorMsg);
+                            return ResponseEntity.status(400).body(errorMsg);
+                        }
+
+                        // 規則 3：阻擋同幼兒 + 同機構的重複有效申請
+                        int activeSameInstitutionCount = service.countActiveApplicationsByChildAndInstitution(childDto.nationalID, caseDto.getInstitutionId());
+                        System.out.println("     - 同機構有效申請數: " + activeSameInstitutionCount);
+                        if (activeSameInstitutionCount >= 1) {
+                            String errorMsg = "幼兒 " + childDto.name + " (身分證: " + childDto.nationalID + ") 已在本機構有有效申請，無法重複提交";
                             System.err.println("  ❌ " + errorMsg);
                             return ResponseEntity.status(400).body(errorMsg);
                         }

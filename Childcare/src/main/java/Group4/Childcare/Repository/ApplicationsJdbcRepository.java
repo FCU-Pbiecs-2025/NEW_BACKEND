@@ -445,8 +445,8 @@ public class ApplicationsJdbcRepository {
                     try {
                         String institutionIdStr = jdbcTemplate.queryForObject(getInstitutionIdSql, String.class, id.toString());
                         if (institutionIdStr != null) {
-                            institutionId = java.util.UUID.fromString(institutionIdStr);
-                            System.out.println("  InstitutionID: " + institutionId);
+                          institutionId = java.util.UUID.fromString(institutionIdStr);
+                          System.out.println("  InstitutionID: " + institutionId);
                         }
                     } catch (Exception ex) {
                         System.out.println("  ❌ 無法獲取 InstitutionID: " + ex.getMessage());
@@ -776,6 +776,7 @@ public class ApplicationsJdbcRepository {
                             System.out.println("  查詢最大 CurrentOrder 失敗 (可能沒有記錄): " + ex.getMessage());
                         }
 
+                        // 如果沒有任何CurrentOrder，則設置為1；否則設置為最大值+1
                         if (maxOrder == null) {
                             currentOrder = 1;
                             System.out.println("  ✅ 設置 CurrentOrder = 1 (該機構第一個候補序號)");
@@ -1379,6 +1380,7 @@ public class ApplicationsJdbcRepository {
                 dto.parents = new java.util.ArrayList<>();
                 dto.children = new java.util.ArrayList<>();
 
+                // 映射身分別 IdentityType -> ApplicationCaseDTO.identityType
                 try {
                     Object idTypeObj = rs.getObject("IdentityType");
                     if (idTypeObj != null) {
@@ -1388,6 +1390,17 @@ public class ApplicationsJdbcRepository {
                     dto.identityType = null;
                 }
 
+                // 映射案件流水號 CaseNumber -> ApplicationCaseDTO.caseNumber
+                try {
+                    Object caseNumberObj = rs.getObject("CaseNumber");
+                    if (caseNumberObj != null) {
+                        dto.caseNumber = ((Number) caseNumberObj).longValue();
+                    }
+                } catch (Exception ex) {
+                    dto.caseNumber = null;
+                }
+
+                // 映射附件欄位
                 try { dto.attachmentPath = rs.getString("AttachmentPath"); } catch (Exception ex) { dto.attachmentPath = null; }
                 try { dto.attachmentPath1 = rs.getString("AttachmentPath1"); } catch (Exception ex) { dto.attachmentPath1 = null; }
                 try { dto.attachmentPath2 = rs.getString("AttachmentPath2"); } catch (Exception ex) { dto.attachmentPath2 = null; }
@@ -1510,6 +1523,23 @@ public class ApplicationsJdbcRepository {
             nationalID, "審核中", "需要補件", "候補中", "撤銷申請審核中");
     return count != null ? count : 0;
   }
-}
 
+  /**
+   * 計算同一機構下指定幼兒的有效申請數（阻擋重複申請用）。
+   * 有效狀態：審核中、需要補件、候補中、撤銷申請審核中、已錄取。
+   */
+  public int countActiveApplicationsByChildAndInstitution(String nationalID, UUID institutionId) {
+    String sql = "SELECT COUNT(DISTINCT ap.ApplicationID) " +
+            "FROM application_participants ap " +
+            "JOIN applications a ON ap.ApplicationID = a.ApplicationID " +
+            "WHERE ap.NationalID = ? AND ap.ParticipantType = 0 " +
+            "AND a.InstitutionID = ? " +
+            "AND ap.Status IN (?, ?, ?, ?, ?)";
+    Integer count = jdbcTemplate.queryForObject(sql, Integer.class,
+            nationalID,
+            institutionId != null ? institutionId.toString() : null,
+            "審核中", "需要補件", "候補中", "撤銷申請審核中", "已錄取");
+    return count != null ? count : 0;
+  }
+}
 

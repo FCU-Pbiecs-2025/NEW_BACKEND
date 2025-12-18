@@ -426,4 +426,8 @@ public class ApplicationsService {
     return applicationsJdbcRepository.countPendingApplicationsByChildNationalID(nationalID);
   }
 
+  public int countActiveApplicationsByChildAndInstitution(String nationalID, UUID institutionId) {
+    return applicationsJdbcRepository.countActiveApplicationsByChildAndInstitution(nationalID, institutionId);
+  }
+
 }
