@@ -18,9 +18,65 @@ public class InstitutionsController {
   @Autowired
   private InstitutionsService service;
 
-  @PostMapping
+  /**
+   * 建立機構資料（純 JSON）
+   * POST /institutions
+   * Content-Type: application/json
+   *
+   * Request Body 範例:
+   * {
+   *   "institutionName": "小天使托嬰中心",
+   *   "contactPerson": "陳淑芬",
+   *   "address": "台中市西區公益路100號",
+   *   "phoneNumber": "04-23456789",
+   *   "fax": "04-23456780",
+   *   "email": "angel@daycare.com",
+   *   "description": "溫馨的托育環境",
+   *   "responsiblePerson": "陳建國",
+   *   "latitude": 24.148000,
+   *   "longitude": 120.664000,
+   *   "institutionsType": true
+   * }
+   *
+   * @param entity 機構資料
+   * @return 新建的機構資訊
+   */
+  @PostMapping(consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<Institutions> create(@RequestBody Institutions entity) {
     return ResponseEntity.ok(service.create(entity));
+  }
+
+  /**
+   * 建立機構資料並上傳圖片（multipart/form-data 格式）
+   * POST /institutions
+   * Content-Type: multipart/form-data
+   *
+   * Form Data:
+   * - data: 機構 JSON 資料（application/json）
+   * - image: 圖片檔案（可選）
+   *
+   * @param data 機構 JSON 資料字符串
+   * @param image 圖片檔案
+   * @return 新建的機構資訊
+   */
+  @PostMapping(consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<?> createWithImage(
+          @RequestPart(value = "data") Institutions entity,
+          @RequestPart(value = "image", required = false) MultipartFile image) {
+    try {
+      // 如果有上傳圖片，使用 createWithImage
+      if (image != null && !image.isEmpty()) {
+        Institutions created = service.createWithImage(entity, image);
+        return ResponseEntity.ok(created);
+      }
+
+      // 如果沒有圖片，使用一般的 create
+      return ResponseEntity.ok(service.create(entity));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body("錯誤: " + e.getMessage());
+    } catch (Exception e) {
+      return ResponseEntity.internalServerError().body("建立失敗: " + e.getMessage());
+    }
   }
 
   @GetMapping("/{id}")
