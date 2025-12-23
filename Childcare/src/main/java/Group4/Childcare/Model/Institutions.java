@@ -68,4 +68,8 @@ public class Institutions {
 
     @Column(name = "InstitutionsType")
     private Boolean institutionsType;
+
+    @Column(name = "AccountStatus")
+    private int accountStatus;
+
 }

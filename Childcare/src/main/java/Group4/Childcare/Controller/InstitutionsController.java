@@ -4,6 +4,7 @@ import Group4.Childcare.Model.Institutions;
 import Group4.Childcare.DTO.InstitutionSummaryDTO;
 import Group4.Childcare.DTO.InstitutionSimpleDTO;
 import Group4.Childcare.Service.InstitutionsService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +18,9 @@ import java.util.UUID;
 public class InstitutionsController {
   @Autowired
   private InstitutionsService service;
+
+  @Autowired
+  private ObjectMapper objectMapper;
 
   /**
    * 建立機構資料（純 JSON）
@@ -174,7 +178,14 @@ public class InstitutionsController {
         return ResponseEntity.notFound().build();
       }
 
-      Institutions entity = existing.get();
+      // 解析前端傳來的 JSON 資料
+      Institutions entity = null;
+      if (data != null && !data.isEmpty()) {
+        entity = objectMapper.readValue(data, Institutions.class);
+      } else {
+        // 如果沒有提供資料，使用現有資料
+        entity = existing.get();
+      }
 
       // 如果有上傳新圖片，更新機構資訊並上傳圖片
       if (image != null && !image.isEmpty()) {

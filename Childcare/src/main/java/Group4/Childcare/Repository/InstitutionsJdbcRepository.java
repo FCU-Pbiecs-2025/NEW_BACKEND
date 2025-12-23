@@ -58,6 +58,7 @@ public class InstitutionsJdbcRepository {
             institution.setLatitude(rs.getBigDecimal("Latitude"));
             institution.setLongitude(rs.getBigDecimal("Longitude"));
             institution.setInstitutionsType(rs.getBoolean("InstitutionsType"));
+            institution.setAccountStatus(rs.getInt("AccountStatus"));
 
             return institution;
         }
@@ -109,8 +110,8 @@ public class InstitutionsJdbcRepository {
         String sql = "INSERT INTO " + TABLE_NAME +
                     " (InstitutionID, InstitutionName, ContactPerson, Address, PhoneNumber, Fax, Email, " +
                     "RelatedLinks, Description, ResponsiblePerson, ImagePath, CreatedUser, CreatedTime, " +
-                    "UpdatedUser, UpdatedTime, Latitude, Longitude, InstitutionsType) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    "UpdatedUser, UpdatedTime, Latitude, Longitude, InstitutionsType, AccountStatus) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // 執行 SQL 新增
         jdbcTemplate.update(sql,
@@ -131,7 +132,8 @@ public class InstitutionsJdbcRepository {
             institution.getUpdatedTime(),
             institution.getLatitude(),
             institution.getLongitude(),
-            institution.getInstitutionsType()
+            institution.getInstitutionsType(),
+            institution.getAccountStatus()
         );
 
         return institution;
@@ -150,7 +152,7 @@ public class InstitutionsJdbcRepository {
                     " SET InstitutionName = ?, ContactPerson = ?, Address = ?, PhoneNumber = ?, " +
                     "Fax = ?, Email = ?, RelatedLinks = ?, Description = ?, ResponsiblePerson = ?, " +
                     "ImagePath = ?, CreatedUser = ?, CreatedTime = ?, UpdatedUser = ?, UpdatedTime = ?, " +
-                    "Latitude = ?, Longitude = ?, InstitutionsType = ? WHERE InstitutionID = ?";
+                    "Latitude = ?, Longitude = ?, InstitutionsType = ?, AccountStatus = ? WHERE InstitutionID = ?";
 
         // 執行 SQL 更新
         jdbcTemplate.update(sql,
@@ -171,6 +173,7 @@ public class InstitutionsJdbcRepository {
             institution.getLatitude(),
             institution.getLongitude(),
             institution.getInstitutionsType(),
+            institution.getAccountStatus(),
             institution.getInstitutionID().toString()
         );
 
@@ -251,10 +254,11 @@ public class InstitutionsJdbcRepository {
 
     /**
      * 查詢所有機構的 ID 和名稱（簡化資料）
+     * 只返回 AccountStatus = 1（啟用）的機構
      * @return List<InstitutionSimpleDTO>
      */
     public List<InstitutionSimpleDTO> findAllSimple() {
-        String sql = "SELECT InstitutionID, InstitutionName FROM " + TABLE_NAME;
+        String sql = "SELECT InstitutionID, InstitutionName FROM " + TABLE_NAME + " WHERE AccountStatus = 1";
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
             InstitutionSimpleDTO dto = new InstitutionSimpleDTO();
             dto.setInstitutionID(UUID.fromString(rs.getString("InstitutionID")));
