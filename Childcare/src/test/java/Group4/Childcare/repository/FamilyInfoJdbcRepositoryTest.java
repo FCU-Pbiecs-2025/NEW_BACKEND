@@ -17,10 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
- * FamilyInfoJdbcRepository ?ÆÂ?Ê∏¨Ë©¶
- * Ê∏¨Ë©¶ÂÆ∂Â∫≠Ë≥áË?ÁÆ°Á??∏È??ÑË??ôÂ∫´?ç‰?
- */
+
 @ExtendWith(MockitoExtension.class)
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class FamilyInfoJdbcRepositoryTest {
