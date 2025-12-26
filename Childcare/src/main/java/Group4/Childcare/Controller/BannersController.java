@@ -207,6 +207,12 @@ public class BannersController {
 
     @GetMapping("/image/{imageName}")
     public ResponseEntity<?> getImage(@PathVariable String imageName) {
+        // Remove query parameters if present (e.g., "image.jpg?_=123456" -> "image.jpg")
+        int queryParamIndex = imageName.indexOf('?');
+        if (queryParamIndex > 0) {
+            imageName = imageName.substring(0, queryParamIndex);
+        }
+
         Path filePath = storageLocation.resolve(imageName);
         if (!Files.exists(filePath)) {
             return ResponseEntity.notFound().build();
