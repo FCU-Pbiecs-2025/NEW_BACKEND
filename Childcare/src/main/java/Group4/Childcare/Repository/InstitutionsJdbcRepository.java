@@ -206,6 +206,15 @@ public class InstitutionsJdbcRepository {
     }
 
     /**
+     * 查詢所有已啟用的機構 (accountStatus = 1)
+     * @return 已啟用的機構列表
+     */
+    public List<Institutions> findAllActive() {
+        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE AccountStatus = 1";
+        return jdbcTemplate.query(sql, INSTITUTIONS_ROW_MAPPER);
+    }
+
+    /**
      * 依 ID 刪除機構
      * @param id 機構 ID
      */

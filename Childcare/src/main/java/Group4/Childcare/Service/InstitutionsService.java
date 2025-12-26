@@ -55,6 +55,14 @@ public class InstitutionsService {
     return repository.findAll();
   }
 
+  /**
+   * 取得所有已啟用的機構 (accountStatus = 1)
+   * @return 已啟用的機構列表
+   */
+  public List<Institutions> getAllActive() {
+    return repository.findAllActive();
+  }
+
   public Institutions update(UUID id, Institutions entity) {
     entity.setInstitutionID(id);
     return repository.save(entity);

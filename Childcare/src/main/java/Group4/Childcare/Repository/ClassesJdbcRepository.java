@@ -100,12 +100,7 @@ public class ClassesJdbcRepository {
             dto.setMaxAgeDescription(null);
         }
         // map CurrentStudents into dto
-        Object curStudentsObj = rs.getObject("CurrentStudents");
-        if (curStudentsObj != null) {
-            dto.setCurrentStudents(((Number) curStudentsObj).intValue());
-        } else {
-            dto.setCurrentStudents(null);
-        }
+
         dto.setAdditionalInfo(rs.getString("AdditionalInfo"));
         dto.setInstitutionName(rs.getString("InstitutionName"));
         String institutionIdStr = rs.getString("InstitutionID");
@@ -195,8 +190,9 @@ public class ClassesJdbcRepository {
 
     // Find all with institution name using LEFT JOIN
     public List<ClassSummaryDTO> findAllWithInstitutionName() {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
-                     "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID";
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
+                     "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
+                     "WHERE i.accountStatus = 1";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER);
     }
 

@@ -94,6 +94,11 @@ public class InstitutionsController {
     return service.getAll();
   }
 
+  @GetMapping("/active")
+  public List<Institutions> getActiveAll() {
+    return service.getAllActive();
+  }
+
   /**
    * 更新機構資料（支援圖片上傳）
    *
