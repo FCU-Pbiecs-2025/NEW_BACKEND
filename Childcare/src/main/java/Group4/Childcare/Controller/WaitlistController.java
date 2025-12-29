@@ -513,7 +513,7 @@ public class WaitlistController {
      * 發送抽籤通知郵件給錄取者和候補者
      */
     private void sendLotteryNotificationEmails(List<Map<String, Object>> acceptedList,
-                                               List<Map<String, Object>> waitlist) {
+                                              List<Map<String, Object>> waitlist) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         int successCount = 0;
         int failCount = 0;
@@ -534,13 +534,17 @@ public class WaitlistController {
                 String status = (String) applicant.get("Status");
                 String reason = (String) applicant.get("Reason");
 
-                // 轉換申請日期
+                // 轉換申請日期（補齊 java.sql.Date / LocalDate）
                 Object applicationDateObj = applicant.get("ApplicationDate");
                 String applicationDate = "";
                 if (applicationDateObj instanceof LocalDateTime) {
                     applicationDate = ((LocalDateTime) applicationDateObj).format(dateFormatter);
                 } else if (applicationDateObj instanceof java.sql.Timestamp) {
                     applicationDate = ((java.sql.Timestamp) applicationDateObj).toLocalDateTime().format(dateFormatter);
+                } else if (applicationDateObj instanceof java.sql.Date) {
+                    applicationDate = ((java.sql.Date) applicationDateObj).toLocalDate().format(dateFormatter);
+                } else if (applicationDateObj instanceof LocalDate) {
+                    applicationDate = ((LocalDate) applicationDateObj).format(dateFormatter);
                 } else if (applicationDateObj instanceof String) {
                     applicationDate = (String) applicationDateObj;
                 }
@@ -581,13 +585,17 @@ public class WaitlistController {
                 String status = (String) applicant.get("Status");
                 Integer currentOrder = (Integer) applicant.get("CurrentOrder");
 
-                // 轉換申請日期
+                // 轉換申請日期（補齊 java.sql.Date / LocalDate）
                 Object applicationDateObj = applicant.get("ApplicationDate");
                 String applicationDate = "";
                 if (applicationDateObj instanceof LocalDateTime) {
                     applicationDate = ((LocalDateTime) applicationDateObj).format(dateFormatter);
                 } else if (applicationDateObj instanceof java.sql.Timestamp) {
                     applicationDate = ((java.sql.Timestamp) applicationDateObj).toLocalDateTime().format(dateFormatter);
+                } else if (applicationDateObj instanceof java.sql.Date) {
+                    applicationDate = ((java.sql.Date) applicationDateObj).toLocalDate().format(dateFormatter);
+                } else if (applicationDateObj instanceof LocalDate) {
+                    applicationDate = ((LocalDate) applicationDateObj).format(dateFormatter);
                 } else if (applicationDateObj instanceof String) {
                     applicationDate = (String) applicationDateObj;
                 }
