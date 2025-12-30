@@ -177,7 +177,6 @@ class BannersControllerTest {
         verify(service, times(1)).getTotalCount();
     }
 
-
     @Test
     void testDelete_Success() throws Exception {
         // Given
@@ -205,5 +204,106 @@ class BannersControllerTest {
 
         verify(service, never()).delete(any());
     }
-}
 
+    // ===== updateJson 測試 =====
+    @Test
+    void testUpdateJson_Success() throws Exception {
+        when(service.getById(testBannerId)).thenReturn(Optional.of(testBanner));
+        when(service.update(eq(testBannerId), any(Banners.class))).thenReturn(testBanner);
+
+        mockMvc.perform(put("/banners/{id}", testBannerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testBanner)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testUpdateJson_NotFound() throws Exception {
+        Integer nonExistentId = 999;
+        when(service.getById(nonExistentId)).thenReturn(Optional.empty());
+
+        mockMvc.perform(put("/banners/{id}", nonExistentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testBanner)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testUpdateJson_NullMeta() throws Exception {
+        when(service.getById(testBannerId)).thenReturn(Optional.of(testBanner));
+        when(service.update(eq(testBannerId), any(Banners.class))).thenReturn(testBanner);
+
+        mockMvc.perform(put("/banners/{id}", testBannerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    // ===== getActiveBanners 測試 =====
+    @Test
+    void testGetActiveBanners_Success() throws Exception {
+        List<Banners> activeBanners = Arrays.asList(testBanner);
+        when(service.findActiveBanners()).thenReturn(activeBanners);
+
+        mockMvc.perform(get("/banners/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
+    void testGetActiveBanners_Empty() throws Exception {
+        when(service.findActiveBanners()).thenReturn(Arrays.asList());
+
+        mockMvc.perform(get("/banners/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    // ===== queryBannersByDateRange 測試 =====
+    @Test
+    void testQueryBannersByDateRange_Success() throws Exception {
+        List<Banners> banners = Arrays.asList(testBanner);
+        when(service.getBannersByDateRange(any(), any(), eq(0), eq(10))).thenReturn(banners);
+        when(service.getCountByDateRange(any(), any())).thenReturn(1L);
+
+        mockMvc.perform(get("/banners/query")
+                .param("startDate", "2025-01-01")
+                .param("endDate", "2025-12-31")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)));
+    }
+
+    @Test
+    void testQueryBannersByDateRange_NoParams() throws Exception {
+        List<Banners> banners = Arrays.asList(testBanner);
+        when(service.getBannersByDateRange(any(), any(), eq(0), eq(10))).thenReturn(banners);
+        when(service.getCountByDateRange(any(), any())).thenReturn(1L);
+
+        mockMvc.perform(get("/banners/query"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testQueryBannersByDateRange_OnlyStartDate() throws Exception {
+        List<Banners> banners = Arrays.asList(testBanner);
+        when(service.getBannersByDateRange(any(), any(), eq(0), eq(10))).thenReturn(banners);
+        when(service.getCountByDateRange(any(), any())).thenReturn(1L);
+
+        mockMvc.perform(get("/banners/query")
+                .param("startDate", "2025-01-01"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testQueryBannersByDateRange_OnlyEndDate() throws Exception {
+        List<Banners> banners = Arrays.asList(testBanner);
+        when(service.getBannersByDateRange(any(), any(), eq(0), eq(10))).thenReturn(banners);
+        when(service.getCountByDateRange(any(), any())).thenReturn(1L);
+
+        mockMvc.perform(get("/banners/query")
+                .param("endDate", "2025-12-31"))
+                .andExpect(status().isOk());
+    }
+}

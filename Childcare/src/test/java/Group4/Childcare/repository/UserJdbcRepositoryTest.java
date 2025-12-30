@@ -1,7 +1,10 @@
 package Group4.Childcare.repository;
 
+import Group4.Childcare.Model.FamilyInfo;
 import Group4.Childcare.Model.Users;
+import Group4.Childcare.Repository.FamilyInfoJdbcRepository;
 import Group4.Childcare.Repository.UserJdbcRepository;
+import Group4.Childcare.DTO.UserSummaryDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,18 +21,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
- * UserJdbcRepository 單元測試
- * 測試使用者管理相關的資料庫操作
- */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class UserJdbcRepositoryTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
 
     @Mock
-    private Group4.Childcare.Repository.FamilyInfoJdbcRepository familyInfoJdbcRepository;
+    private FamilyInfoJdbcRepository familyInfoJdbcRepository;
 
     @InjectMocks
     private UserJdbcRepository repository;
@@ -54,98 +54,210 @@ class UserJdbcRepositoryTest {
         testUser.setBirthDate(LocalDate.of(1990, 1, 1));
     }
 
-    // ===== 測試 save (新增使用者) =====
+    // ==================== save Tests ====================
+
     @Test
-    void testSave_Success() {
-        // Given
+    void testSave_NewUser_Success() {
+        // Given: UserID is null, so it should insert
+        testUser.setUserID(null);
         UUID familyInfoId = UUID.randomUUID();
         testUser.setFamilyInfoID(familyInfoId);
-        when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+
+        // Mock checks
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testUser.getAccount()))).thenReturn(0);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testUser.getEmail()))).thenReturn(0);
+
+        // Mock insert
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any()))
                 .thenReturn(1);
 
         // When
         Users result = repository.save(testUser);
 
         // Then
-        assertNotNull(result);
-        assertEquals("A123456789", result.getAccount());
-        verify(jdbcTemplate, times(1)).update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
-    }
-
-    // ===== 測試 findById (根據ID查詢) =====
-    @Test
-    void testFindById_Success() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
-                .thenReturn(testUser);
-
-        // When
-        Optional<Users> result = repository.findById(testUserId);
-
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(testUserId, result.get().getUserID());
-        verify(jdbcTemplate, times(1)).queryForObject(anyString(), any(RowMapper.class), anyString());
+        assertNotNull(result.getUserID());
+        verify(jdbcTemplate).update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any());
     }
 
     @Test
-    void testFindById_ReturnsEmpty_WhenNotFound() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
-                .thenThrow(new RuntimeException("Not found"));
+    void testSave_NewUser_AutoCreateFamilyInfo() {
+        // Given: UserID null, FamilyInfoID null
+        testUser.setUserID(null);
+        testUser.setFamilyInfoID(null);
 
-        // When
-        Optional<Users> result = repository.findById(UUID.randomUUID());
+        // Mock FamilyInfo creation
+        FamilyInfo newFamily = new FamilyInfo();
+        newFamily.setFamilyInfoID(UUID.randomUUID());
+        when(familyInfoJdbcRepository.save(any(FamilyInfo.class))).thenReturn(newFamily);
 
-        // Then
-        assertFalse(result.isPresent());
-    }
-
-    // ===== 測試 findAll (查詢所有使用者) =====
-    @Test
-    void testFindAll_ReturnsAllUsers() {
-        // Given
-        List<Users> mockUsers = Arrays.asList(testUser, testUser);
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class)))
-                .thenReturn(mockUsers);
-
-        // When
-        List<Users> result = repository.findAll();
-
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        verify(jdbcTemplate, times(1)).query(anyString(), any(RowMapper.class));
-    }
-
-    // ===== 測試 count (計算總數) =====
-    @Test
-    void testCount_ReturnsCorrectCount() {
-        // Given
-        Long expectedCount = 100L;
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
-                .thenReturn(expectedCount);
-
-        // When
-        long result = repository.count();
-
-        // Then
-        assertEquals(expectedCount, result);
-        verify(jdbcTemplate, times(1)).queryForObject(anyString(), eq(Long.class));
-    }
-
-    // ===== 測試 deleteById (刪除使用者) =====
-    @Test
-    void testDeleteById_Success() {
-        // Given
-        when(jdbcTemplate.update(anyString(), anyString()))
+        // Mock checks and insert
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString())).thenReturn(0);
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any()))
                 .thenReturn(1);
 
         // When
-        repository.deleteById(testUserId);
+        Users result = repository.save(testUser);
 
         // Then
-        verify(jdbcTemplate, times(1)).update(anyString(), eq(testUserId.toString()));
+        assertNotNull(result.getFamilyInfoID());
+        assertEquals(newFamily.getFamilyInfoID(), result.getFamilyInfoID());
+        verify(familyInfoJdbcRepository).save(any(FamilyInfo.class));
     }
-}
 
+    @Test
+    void testSave_UpdateUser_Success() {
+        // Given: UserID exists
+        testUser.setFamilyInfoID(UUID.randomUUID()); // Fix: Set FamilyInfoID to avoid NPE
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any()))
+                .thenReturn(1); // update returns 1
+
+        // When
+        Users result = repository.save(testUser);
+
+        // Then
+        assertEquals(testUserId, result.getUserID());
+        // Verify update SQL (14 params for update)
+        verify(jdbcTemplate).update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void testInsert_DuplicateAccount_ThrowsRuntime() {
+        testUser.setUserID(null);
+        testUser.setFamilyInfoID(UUID.randomUUID());
+
+        // existsByAccount -> true (count > 0)
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testUser.getAccount()))).thenReturn(1);
+
+        assertThrows(RuntimeException.class, () -> repository.save(testUser));
+    }
+
+    @Test
+    void testInsert_DuplicateEmail_ThrowsRuntime() {
+        testUser.setUserID(null);
+        testUser.setFamilyInfoID(UUID.randomUUID());
+
+        // existsByAccount -> false, existsByEmail -> true
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testUser.getAccount()))).thenReturn(0);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testUser.getEmail()))).thenReturn(1);
+
+        assertThrows(RuntimeException.class, () -> repository.save(testUser));
+    }
+
+    @Test
+    void testSave_NullUser_ThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> repository.save(null));
+    }
+
+    @Test
+    void testSave_MissingRequiredFields_ThrowsException() {
+        testUser.setAccount(null);
+        assertThrows(IllegalArgumentException.class, () -> repository.save(testUser));
+
+        testUser.setAccount("valid");
+        testUser.setPassword(null);
+        assertThrows(IllegalArgumentException.class, () -> repository.save(testUser));
+    }
+
+    // ==================== find & exists Tests ====================
+
+    @Test
+    void testFindById_Found() {
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(testUserId.toString())))
+                .thenReturn(testUser);
+        Optional<Users> result = repository.findById(testUserId);
+        assertTrue(result.isPresent());
+    }
+
+    @Test
+    void testFindByAccount_Found() {
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(testUser.getAccount())))
+                .thenReturn(testUser);
+        Optional<Users> result = repository.findByAccount(testUser.getAccount());
+        assertTrue(result.isPresent());
+    }
+
+    @Test
+    void testFindByEmail_Found() {
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(testUser.getEmail())))
+                .thenReturn(testUser);
+        Optional<Users> result = repository.findByEmail(testUser.getEmail());
+        assertTrue(result.isPresent());
+    }
+
+    @Test
+    void testExistsByAccount_True() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq("acc"))).thenReturn(1);
+        assertTrue(repository.existsByAccount("acc"));
+    }
+
+    // ==================== Partial Update Tests ====================
+
+    @Test
+    void testUpdateProfile() {
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), anyString())).thenReturn(1);
+
+        int rows = repository.updateProfile(testUserId, "New Name", "new@mail.com", "0999888777", "New Addr");
+        assertEquals(1, rows);
+    }
+
+    @Test
+    void testUpdateProfile_NoUpdates() {
+        // All null -> should return 0 and not call jdbc
+        int rows = repository.updateProfile(testUserId, null, null, null, null);
+        assertEquals(0, rows);
+        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+    }
+
+    @Test
+    void testUpdateAccountStatus() {
+        when(jdbcTemplate.update(anyString(), eq(2), eq(testUserId.toString()))).thenReturn(1);
+        int rows = repository.updateAccountStatus(testUserId, 2);
+        assertEquals(1, rows);
+    }
+
+    // ==================== Search methods ====================
+
+    @Test
+    void testSearchUsersWithOffset() {
+        List<UserSummaryDTO> list = new ArrayList<>();
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), anyString(), anyString(), anyString(), anyString(),
+                anyInt(), anyInt()))
+                .thenReturn(list);
+
+        List<UserSummaryDTO> result = repository.searchUsersWithOffset("term", 0, 10);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testCountSearchUsers() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), anyString(), anyString(), anyString(),
+                anyString()))
+                .thenReturn(5L);
+        long count = repository.countSearchUsers("term");
+        assertEquals(5L, count);
+    }
+
+    @Test
+    void testSearchUsersByAccountWithOffset() {
+        List<UserSummaryDTO> list = new ArrayList<>();
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), anyString(), anyInt(), anyInt()))
+                .thenReturn(list);
+        List<UserSummaryDTO> result = repository.searchUsersByAccountWithOffset("acc", 0, 10);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testSearchCitizenUsersByAccountWithOffset() {
+        List<UserSummaryDTO> list = new ArrayList<>();
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), anyString(), anyInt(), anyInt()))
+                .thenReturn(list);
+        List<UserSummaryDTO> result = repository.searchCitizenUsersByAccountWithOffset("acc", 0, 10);
+        assertNotNull(result);
+    }
+
+}

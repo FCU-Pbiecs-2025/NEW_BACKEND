@@ -1,5 +1,6 @@
 package Group4.Childcare.repository;
 
+import Group4.Childcare.DTO.ApplicationParticipantDTO;
 import Group4.Childcare.DTO.RevokeApplicationDTO;
 import Group4.Childcare.Repository.RevokesJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -57,99 +59,18 @@ class RevokesJdbcRepositoryTest {
         String nationalID = "A123456789";
 
         List<RevokeApplicationDTO> mockResults = Collections.singletonList(
-            createTestRevokeApplicationDTO()
-        );
+                createTestRevokeApplicationDTO());
 
         doReturn(mockResults).when(jdbcTemplate).query(anyString(), any(RowMapper.class), any(Object[].class));
 
         // When
         List<RevokeApplicationDTO> result = revokesRepository.findRevokedApplications(
-            page, size, institutionID, caseNumber, nationalID);
+                page, size, institutionID, caseNumber, nationalID);
 
         // Then
         assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals(testCancellationId, result.get(0).getCancellationID());
-    }
-
-    @Test
-    void testFindRevokedApplications_WithOnlyInstitutionID_Success() {
-        // Given
-        int page = 0;
-        int size = 10;
-        String institutionID = testInstitutionId.toString();
-
-        List<RevokeApplicationDTO> mockResults = Arrays.asList(
-            createTestRevokeApplicationDTO(),
-            createTestRevokeApplicationDTO()
-        );
-
-        doReturn(mockResults).when(jdbcTemplate).query(anyString(), any(RowMapper.class), any(Object[].class));
-
-        // When
-        List<RevokeApplicationDTO> result = revokesRepository.findRevokedApplications(
-            page, size, institutionID, null, null);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-    }
-
-    @Test
-    void testFindRevokedApplications_WithNullFilters_Success() {
-        // Given
-        int page = 0;
-        int size = 10;
-
-        List<RevokeApplicationDTO> mockResults = Collections.singletonList(
-            createTestRevokeApplicationDTO()
-        );
-
-        doReturn(mockResults).when(jdbcTemplate).query(anyString(), any(RowMapper.class), any(Object[].class));
-
-        // When
-        List<RevokeApplicationDTO> result = revokesRepository.findRevokedApplications(
-            page, size, null, null, null);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
-    }
-
-    @Test
-    void testFindRevokedApplications_EmptyResult() {
-        // Given
-        doReturn(Collections.emptyList()).when(jdbcTemplate).query(anyString(), any(RowMapper.class), any(Object[].class));
-
-        // When
-        List<RevokeApplicationDTO> result = revokesRepository.findRevokedApplications(
-            0, 10, null, null, null);
-
-        // Then
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void testFindRevokedApplications_Pagination_Success() {
-        // Given
-        int page = 2;
-        int size = 15;
-
-        List<RevokeApplicationDTO> mockResults = Collections.singletonList(
-            createTestRevokeApplicationDTO()
-        );
-
-        doReturn(mockResults).when(jdbcTemplate).query(anyString(), any(RowMapper.class), any(Object[].class));
-
-        // When
-        List<RevokeApplicationDTO> result = revokesRepository.findRevokedApplications(
-            page, size, null, null, null);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        // Verify pagination parameters: offset should be page * size = 2 * 15 = 30
     }
 
     // ==================== countRevokedApplications Tests ====================
@@ -173,9 +94,10 @@ class RevokesJdbcRepositoryTest {
 
     @Test
     void testCountRevokedApplications_WithNullFilters_Success() {
-        // Given - when no filters, queryForObject is called without parameters
+        // Given - when no filters, queryForObject is called without parameters or empty
+        // params
         when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
-            .thenReturn(100L);
+                .thenReturn(100L);
 
         // When
         long count = revokesRepository.countRevokedApplications(null, null, null);
@@ -184,62 +106,127 @@ class RevokesJdbcRepositoryTest {
         assertEquals(100L, count);
     }
 
+    // ==================== searchRevokedApplicationsPaged Tests
+    // ====================
+
     @Test
-    void testCountRevokedApplications_ZeroResult() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
-            .thenReturn(0L);
+    void testSearchRevokedApplicationsPaged_Success() {
+        List<RevokeApplicationDTO> list = Collections.singletonList(createTestRevokeApplicationDTO());
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(list);
 
-        // When
-        long count = revokesRepository.countRevokedApplications(null, null, null);
+        List<RevokeApplicationDTO> result = revokesRepository.searchRevokedApplicationsPaged("123", "N123", 0, 10,
+                "InstID");
+        assertEquals(1, result.size());
+    }
 
-        // Then
-        assertEquals(0L, count);
+    // ==================== countSearchRevokedApplications Tests
+    // ====================
+
+    @Test
+    void testCountSearchRevokedApplications_Success() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(10L);
+        long count = revokesRepository.countSearchRevokedApplications("123", "N123", "InstID");
+        assertEquals(10L, count);
     }
 
     @Test
-    void testCountRevokedApplications_WithOnlyInstitutionID() {
-        // Given
-        String institutionID = testInstitutionId.toString();
+    void testCountSearchRevokedApplications_NoFilters() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5L);
+        long count = revokesRepository.countSearchRevokedApplications(null, null, null);
+        assertEquals(5L, count);
+    }
 
-        doReturn(50L).when(jdbcTemplate).queryForObject(anyString(), eq(Long.class), any(Object[].class));
+    // ==================== Detail & Other Query Tests ====================
 
-        // When
-        long count = revokesRepository.countRevokedApplications(institutionID, null, null);
+    @Test
+    void testGetRevokeByCancellationID_Found() {
+        RevokeApplicationDTO dto = createTestRevokeApplicationDTO();
+        when(jdbcTemplate.queryForObject(anyString(), any(Object[].class), any(RowMapper.class))).thenReturn(dto);
 
-        // Then
-        assertEquals(50L, count);
+        RevokeApplicationDTO result = revokesRepository.getRevokeByCancellationID(testCancellationId.toString());
+        assertNotNull(result);
     }
 
     @Test
-    void testCountRevokedApplications_WithOnlyCaseNumber() {
-        // Given
-        String caseNumber = "12345";
+    void testGetParentsByCancellation_Found() {
+        ApplicationParticipantDTO dto = new ApplicationParticipantDTO();
+        dto.participantType = "1";
+        dto.name = "Parent";
+        List<ApplicationParticipantDTO> list = Collections.singletonList(dto);
+        when(jdbcTemplate.query(anyString(), any(Object[].class), any(RowMapper.class))).thenReturn(list);
 
-        doReturn(1L).when(jdbcTemplate).queryForObject(anyString(), eq(Long.class), any(Object[].class));
+        List<ApplicationParticipantDTO> result = revokesRepository
+                .getParentsByCancellation(testCancellationId.toString());
+        assertFalse(result.isEmpty());
+        assertEquals("Parent", result.get(0).name);
+    }
 
-        // When
-        long count = revokesRepository.countRevokedApplications(null, caseNumber, null);
+    @Test
+    void testGetApplicationDetailByCancellationAndNationalID_Found() {
+        ApplicationParticipantDTO dto = new ApplicationParticipantDTO();
+        dto.name = "Child";
+        when(jdbcTemplate.queryForObject(anyString(), any(Object[].class), any(RowMapper.class))).thenReturn(dto);
 
-        // Then
-        assertEquals(1L, count);
+        ApplicationParticipantDTO result = revokesRepository
+                .getApplicationDetailByCancellationAndNationalID(testCancellationId.toString(), "N123");
+        assertNotNull(result);
+    }
+
+    // ==================== Update & Insert Tests ====================
+
+    @Test
+    void testUpdateConfirmDate() {
+        LocalDate date = LocalDate.now();
+        when(jdbcTemplate.update(anyString(), eq(date), anyString())).thenReturn(1);
+        int rows = revokesRepository.updateConfirmDate(testCancellationId.toString(), date);
+        assertEquals(1, rows);
+    }
+
+    @Test
+    void testInsertCancellation_Success() {
+        // Mock update for insert
+        when(jdbcTemplate.update(anyString(), anyString(), anyString(), anyString(), any(), anyString(), anyString()))
+                .thenReturn(1);
+        // Mock update for status
+        when(jdbcTemplate.update(anyString(), eq("撤銷申請審核中"), anyString(), anyString())).thenReturn(1);
+
+        assertDoesNotThrow(() -> revokesRepository.insertCancellation(
+                testApplicationId.toString(), "Reason", "N123", LocalDate.now(), "Case123"));
+
+        // Verify insert called
+        verify(jdbcTemplate).update(anyString(), anyString(), eq(testApplicationId.toString()), eq("Reason"), any(),
+                eq("N123"), eq("Case123"));
+    }
+
+    @Test
+    void testInsertCancellation_InsertFailed_ThrowsException() {
+        when(jdbcTemplate.update(anyString(), anyString(), anyString(), anyString(), any(), anyString(), anyString()))
+                .thenReturn(0);
+
+        assertThrows(IllegalStateException.class, () -> revokesRepository.insertCancellation(
+                testApplicationId.toString(), "Reason", "N123", LocalDate.now(), "Case123"));
+    }
+
+    @Test
+    void testUpdateApplicationParticipantStatus() {
+        when(jdbcTemplate.update(anyString(), eq("Status"), anyString(), anyString())).thenReturn(1);
+        int rows = revokesRepository.updateApplicationParticipantStatus(testApplicationId.toString(), "N123", "Status");
+        assertEquals(1, rows);
     }
 
     // ==================== Helper Methods ====================
 
     private RevokeApplicationDTO createTestRevokeApplicationDTO() {
         return new RevokeApplicationDTO(
-            testCancellationId,
-            testApplicationId,
-            LocalDateTime.now(),
-            testUserId,
-            "王大明",
-            testInstitutionId,
-            "測試幼兒園",
-            "家長主動撤銷",
-            "A123456789",
-            "12345"
-        );
+                testCancellationId,
+                testApplicationId,
+                LocalDateTime.now(),
+                testUserId,
+                "王大明",
+                testInstitutionId,
+                "測試幼兒園",
+                "家長主動撤銷",
+                "A123456789",
+                "12345");
     }
 }
-

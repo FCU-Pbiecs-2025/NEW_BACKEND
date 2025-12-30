@@ -159,8 +159,7 @@ class RulesControllerTest {
                 .andExpect(jsonPath("$.admissionEligibility", is("更新後的入學資格")))
                 .andExpect(jsonPath("$.feeAndRefundPolicy", is("更新後的收費政策")));
 
-
         verify(service, times(1)).update(eq(testRuleId), any(Rules.class));
     }
-}
 
+}

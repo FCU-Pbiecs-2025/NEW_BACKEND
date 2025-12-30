@@ -80,7 +80,7 @@ public class SimpleLoginController {
         // 登入成功
         // ✅ 生成 JWT token
         String token = jwtUtil.generateToken(user);
-        System.out.println("✅ 用戶登入成功，已生成 JWT token: " + token.substring(0, 50) + "...");
+        System.out.println("✅ 用戶登入成功，已生成 JWT token: " + (token.length() > 50 ? token.substring(0, 50) + "..." : token));
 
         Map<String, Object> userInfo = new HashMap<>();
         // Original (existing) PascalCase keys
@@ -163,7 +163,7 @@ public class SimpleLoginController {
         // 登入成功
         // ✅ 生成 JWT token
         String token = jwtUtil.generateToken(user);
-        System.out.println("✅ 管理員登入成功，已生成 JWT token: " + token.substring(0, 50) + "...");
+        System.out.println("✅ 管理員登入成功，已生成 JWT token: " + (token.length() > 50 ? token.substring(0, 50) + "..." : token));
 
         Map<String, Object> userInfo = new HashMap<>();
         // Original (existing) PascalCase keys

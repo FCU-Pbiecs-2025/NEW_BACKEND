@@ -59,6 +59,7 @@ class InstitutionsControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
         testInstitutionId = UUID.randomUUID();
         testInstitution = new Institutions();
@@ -68,6 +69,141 @@ class InstitutionsControllerTest {
         testInstitution.setPhoneNumber("02-12345678");
         testInstitution.setEmail("test@institution.com");
         testInstitution.setContactPerson("測試聯絡人");
+    }
+
+    // ===== getOffset 分頁測試 =====
+    @Test
+    void testGetOffset_WithDefaultParams() throws Exception {
+        Group4.Childcare.DTO.InstitutionOffsetDTO dto = new Group4.Childcare.DTO.InstitutionOffsetDTO();
+        dto.setOffset(0);
+        dto.setSize(10);
+        dto.setTotalElements(1);
+        dto.setContent(Arrays.asList(testInstitution));
+
+        when(service.getOffset(0, 10, null, null)).thenReturn(dto);
+
+        mockMvc.perform(get("/institutions/offset"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offset", is(0)))
+                .andExpect(jsonPath("$.size", is(10)));
+    }
+
+    @Test
+    void testGetOffset_WithCustomParams() throws Exception {
+        Group4.Childcare.DTO.InstitutionOffsetDTO dto = new Group4.Childcare.DTO.InstitutionOffsetDTO();
+        dto.setOffset(10);
+        dto.setSize(5);
+        dto.setTotalElements(20);
+
+        when(service.getOffset(eq(10), eq(5), any(), eq("搜尋"))).thenReturn(dto);
+
+        mockMvc.perform(get("/institutions/offset")
+                .param("offset", "10")
+                .param("size", "5")
+                .param("search", "搜尋"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offset", is(10)));
+    }
+
+    @Test
+    void testGetOffset_WithInstitutionId() throws Exception {
+        Group4.Childcare.DTO.InstitutionOffsetDTO dto = new Group4.Childcare.DTO.InstitutionOffsetDTO();
+        dto.setOffset(0);
+        dto.setSize(10);
+
+        when(service.getOffset(eq(0), eq(10), eq(testInstitutionId), any())).thenReturn(dto);
+
+        mockMvc.perform(get("/institutions/offset")
+                .param("InstitutionID", testInstitutionId.toString()))
+                .andExpect(status().isOk());
+    }
+
+    // ===== getActiveAll 測試 =====
+    @Test
+    void testGetActiveAll_Success() throws Exception {
+        List<Institutions> activeList = Arrays.asList(testInstitution);
+        when(service.getAllActive()).thenReturn(activeList);
+
+        mockMvc.perform(get("/institutions/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
+    void testGetActiveAll_EmptyList() throws Exception {
+        when(service.getAllActive()).thenReturn(Arrays.asList());
+
+        mockMvc.perform(get("/institutions/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    // ===== getOffsetByName 測試 =====
+    @Test
+    void testGetOffsetByName_WithName() throws Exception {
+        Group4.Childcare.DTO.InstitutionOffsetDTO dto = new Group4.Childcare.DTO.InstitutionOffsetDTO();
+        dto.setOffset(0);
+        dto.setSize(10);
+        dto.setContent(Arrays.asList(testInstitution));
+
+        when(service.getOffsetByName(eq(0), eq(10), any(), eq("測試"))).thenReturn(dto);
+
+        mockMvc.perform(get("/institutions/offset/name-search")
+                .param("name", "測試"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testGetOffsetByName_WithInstitutionId() throws Exception {
+        Group4.Childcare.DTO.InstitutionOffsetDTO dto = new Group4.Childcare.DTO.InstitutionOffsetDTO();
+
+        when(service.getOffsetByName(eq(0), eq(10), eq(testInstitutionId), any())).thenReturn(dto);
+
+        mockMvc.perform(get("/institutions/offset/name-search")
+                .param("InstitutionID", testInstitutionId.toString()))
+                .andExpect(status().isOk());
+    }
+
+    // ===== create 邊界測試 =====
+    @Test
+    void testCreate_EmptyName() throws Exception {
+        testInstitution.setInstitutionName("");
+        when(service.create(any(Institutions.class))).thenReturn(testInstitution);
+
+        mockMvc.perform(post("/institutions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testInstitution)))
+                .andExpect(status().isOk());
+    }
+
+    // ===== update 變體測試 =====
+    @Test
+    void testUpdate_NullReturn() throws Exception {
+        when(service.update(eq(testInstitutionId), any(Institutions.class))).thenReturn(null);
+
+        mockMvc.perform(put("/institutions/{id}", testInstitutionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testInstitution)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testUpdate_WithAllFields() throws Exception {
+        testInstitution.setFax("02-87654321");
+        testInstitution.setDescription("完整說明");
+        testInstitution.setRelatedLinks("https://test.com");
+        testInstitution.setResponsiblePerson("負責人");
+        testInstitution.setLatitude(java.math.BigDecimal.valueOf(25.0));
+        testInstitution.setLongitude(java.math.BigDecimal.valueOf(121.0));
+        testInstitution.setInstitutionsType(true);
+
+        when(service.update(eq(testInstitutionId), any(Institutions.class))).thenReturn(testInstitution);
+
+        mockMvc.perform(put("/institutions/{id}", testInstitutionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testInstitution)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fax", is("02-87654321")));
     }
 
     @Test
@@ -161,8 +297,7 @@ class InstitutionsControllerTest {
                 testInstitutionId,
                 "測試托育機構",
                 "台北市測試路100號",
-                "02-12345678"
-        );
+                "02-12345678");
         List<InstitutionSummaryDTO> summaries = Arrays.asList(summaryDTO);
         when(service.getSummaryAll()).thenReturn(summaries);
 
@@ -181,8 +316,7 @@ class InstitutionsControllerTest {
         // Given
         InstitutionSimpleDTO simpleDTO = new InstitutionSimpleDTO(
                 testInstitutionId,
-                "測試托育機構"
-        );
+                "測試托育機構");
         List<InstitutionSimpleDTO> simples = Arrays.asList(simpleDTO);
         when(service.getAllSimple()).thenReturn(simples);
 
@@ -196,4 +330,3 @@ class InstitutionsControllerTest {
         verify(service, times(1)).getAllSimple();
     }
 }
-

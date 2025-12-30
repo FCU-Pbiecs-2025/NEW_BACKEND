@@ -2,13 +2,14 @@ package Group4.Childcare.Controller;
 
 import Group4.Childcare.Service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/email")
+@RequestMapping(value = "/api/email", produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8")
 @CrossOrigin
 public class EmailController {
 

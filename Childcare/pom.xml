@@ -29,6 +29,8 @@
     <properties>
         <java.version>23</java.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
     <dependencies>
         <dependency>
@@ -156,8 +158,8 @@
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>
                     </includes>
-                    <!-- Keep JaCoCo + any other tooling args injected via argLine -->
-                    <argLine>${argLine}</argLine>
+                    <!-- Keep JaCoCo + Mockito agent + JVM args -->
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8</argLine>
                 </configuration>
             </plugin>
             <plugin>

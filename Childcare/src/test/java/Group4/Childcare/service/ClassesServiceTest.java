@@ -1,6 +1,5 @@
 package Group4.Childcare.service;
 
-import Group4.Childcare.DTO.ClassNameDTO;
 import Group4.Childcare.DTO.ClassSummaryDTO;
 import Group4.Childcare.Model.Classes;
 import Group4.Childcare.Repository.ClassesJdbcRepository;
@@ -200,14 +199,12 @@ class ClassesServiceTest {
         ClassSummaryDTO summaryDTO = new ClassSummaryDTO(
                 testClassId,
                 "幼幼班",
-                20,
+                Integer.valueOf(20),
                 "2歲",
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-
-                null
-        );
+                "適合2-3歲幼兒");
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
         when(repository.findAllWithInstitutionName()).thenReturn(summaryList);
 
@@ -246,14 +243,12 @@ class ClassesServiceTest {
         ClassSummaryDTO summaryDTO = new ClassSummaryDTO(
                 testClassId,
                 "幼幼班",
-                20,
+                Integer.valueOf(20),
                 "2歲",
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-
-                null
-        );
+                "適合2-3歲幼兒");
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
         when(repository.findWithOffsetAndInstitutionName(offset, size)).thenReturn(summaryList);
 
@@ -275,13 +270,12 @@ class ClassesServiceTest {
         ClassSummaryDTO summaryDTO = new ClassSummaryDTO(
                 testClassId,
                 "幼幼班",
-                20,
+                Integer.valueOf(20),
                 "2歲",
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                null
-        );
+                "適合2-3歲幼兒");
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
         when(repository.findWithOffsetAndInstitutionNameByInstitutionID(offset, size, testInstitutionId))
                 .thenReturn(summaryList);
@@ -342,4 +336,3 @@ class ClassesServiceTest {
         verify(repository, times(1)).findByInstitutionId(nonExistentInstitutionId);
     }
 }
-

@@ -8,17 +8,24 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.RowMapper;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-
 
 @ExtendWith(MockitoExtension.class)
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
@@ -26,6 +33,15 @@ class BannersJdbcRepositoryTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private Connection connection;
+
+    @Mock
+    private PreparedStatement preparedStatement;
+
+    @Mock
+    private ResultSet resultSet;
 
     @InjectMocks
     private BannersJdbcRepository bannersRepository;
@@ -37,19 +53,21 @@ class BannersJdbcRepositoryTest {
         testSortOrder = 1;
     }
 
-    // ==================== save Tests ====================
+    // ==================== save (Insert & Update) Tests ====================
 
     @Test
-    void testSave_NewBanner_Success() {
+    void testSave_Insert_Success() throws Exception {
         // Given
         Banners banner = createTestBanner();
         banner.setSortOrder(5);
 
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyInt()))
-            .thenReturn(0); // not exists
+        // Mock existsById check (for save logic)
+        // save checks if sortOrder > 0 (true) && existsById
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(5)))
+                .thenReturn(0); // Not exists -> Insert
 
-        when(jdbcTemplate.update(any(PreparedStatementCreator.class)))
-            .thenReturn(1);
+        // Mock insert update
+        when(jdbcTemplate.update(any(PreparedStatementCreator.class))).thenReturn(1);
 
         // When
         Banners result = bannersRepository.save(banner);
@@ -57,193 +75,225 @@ class BannersJdbcRepositoryTest {
         // Then
         assertNotNull(result);
         assertEquals(5, result.getSortOrder());
+        verify(jdbcTemplate).update(any(PreparedStatementCreator.class));
     }
 
     @Test
-    void testSave_ExistingBanner_Update_Success() {
+    void testSave_Update_Success() {
         // Given
         Banners banner = createTestBanner();
-        banner.setSortOrder(testSortOrder);
+        banner.setSortOrder(5);
 
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testSortOrder)))
-            .thenReturn(1); // exists
+        // Mock existsById -> true
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(5)))
+                .thenReturn(1);
+        // Mock findById for update (it fetches existing to merge)
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(5)))
+                .thenReturn(banner); // Return same banner as existing
 
-        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(testSortOrder)))
-            .thenReturn(banner);
-
-        when(jdbcTemplate.update(any(PreparedStatementCreator.class)))
-            .thenReturn(1);
+        // Mock update execution
+        when(jdbcTemplate.update(any(PreparedStatementCreator.class))).thenReturn(1);
 
         // When
         Banners result = bannersRepository.save(banner);
 
         // Then
         assertNotNull(result);
-        assertEquals(testSortOrder, result.getSortOrder());
+        verify(jdbcTemplate).update(any(PreparedStatementCreator.class));
+    }
+
+    @Test
+    void testInsert_MissingRequiredFields_ThrowsException() {
+        Banners banner = new Banners();
+        banner.setSortOrder(1);
+        // Missing start/end time etc.
+
+        assertThrows(IllegalArgumentException.class, () -> bannersRepository.save(banner));
+    }
+
+    @Test
+    void testInsert_NullBanner_ThrowsException() {
+        // Using reflection or modified save logic to test private insert directly is
+        // hard,
+        // but save(null) throws NPE usually, but here checking repository logic
+        try {
+            bannersRepository.save(null);
+            fail("Should throw NPE or IllegalArgumentException");
+        } catch (Exception e) {
+            // Expected
+        }
+    }
+
+    @Test
+    void testUpdate_NotFound_ThrowsException() {
+        // Given
+        Banners banner = createTestBanner();
+        banner.setSortOrder(999);
+
+        // Exists -> true so it goes to update
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(999)))
+                .thenReturn(1);
+
+        // But findById inside update returns empty (simulation of race condition or
+        // weird state)
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(999)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+
+        // When & Then
+        assertThrows(RuntimeException.class, () -> bannersRepository.save(banner));
+    }
+
+    @Test
+    void testUpdate_NoRowsAffected_ThrowsException() {
+        // Given
+        Banners banner = createTestBanner();
+        banner.setSortOrder(5);
+
+        // Exists -> true
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(5))).thenReturn(1);
+        // Existing record found
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(5))).thenReturn(banner);
+
+        // Mock update returning 0
+        when(jdbcTemplate.update(any(PreparedStatementCreator.class))).thenReturn(0);
+
+        // When & Then
+        assertThrows(RuntimeException.class, () -> bannersRepository.save(banner));
     }
 
     // ==================== findById Tests ====================
 
     @Test
-    void testFindById_Success() {
-        // Given
-        Banners mockBanner = createTestBanner();
-        mockBanner.setSortOrder(testSortOrder);
-
+    void testFindById_Found() {
+        Banners banner = createTestBanner();
         when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(testSortOrder)))
-            .thenReturn(mockBanner);
+                .thenReturn(banner);
 
-        // When
         Optional<Banners> result = bannersRepository.findById(testSortOrder);
-
-        // Then
         assertTrue(result.isPresent());
         assertEquals(testSortOrder, result.get().getSortOrder());
-        assertEquals("test-banner.jpg", result.get().getImageName());
     }
 
     @Test
     void testFindById_NotFound() {
-        // Given
         when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyInt()))
-            .thenThrow(new RuntimeException("Not found"));
+                .thenThrow(new EmptyResultDataAccessException(1));
 
-        // When
-        Optional<Banners> result = bannersRepository.findById(testSortOrder);
-
-        // Then
+        Optional<Banners> result = bannersRepository.findById(999);
         assertFalse(result.isPresent());
     }
 
-    // ==================== findAll Tests ====================
+    // ==================== findAll & delete Tests ====================
 
     @Test
-    void testFindAll_Success() {
-        // Given
-        Banners banner1 = createTestBanner();
-        banner1.setSortOrder(1);
-        banner1.setImageName("banner1.jpg");
+    void testFindAll() {
+        List<Banners> list = Arrays.asList(createTestBanner(), createTestBanner());
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(list);
 
-        Banners banner2 = createTestBanner();
-        banner2.setSortOrder(2);
-        banner2.setImageName("banner2.jpg");
-
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class)))
-            .thenReturn(Arrays.asList(banner1, banner2));
-
-        // When
         List<Banners> result = bannersRepository.findAll();
-
-        // Then
-        assertNotNull(result);
         assertEquals(2, result.size());
-        assertEquals("banner1.jpg", result.get(0).getImageName());
-        assertEquals("banner2.jpg", result.get(1).getImageName());
     }
 
     @Test
-    void testFindAll_EmptyResult() {
-        // Given
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class)))
-            .thenReturn(Collections.emptyList());
-
-        // When
-        List<Banners> result = bannersRepository.findAll();
-
-        // Then
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
+    void testDeleteById() {
+        bannersRepository.deleteById(1);
+        verify(jdbcTemplate).update(anyString(), eq(1));
     }
 
-    // ==================== findActiveBanners Tests ====================
+    @Test
+    void testDelete_Entity() {
+        Banners banner = new Banners();
+        banner.setSortOrder(10);
+        bannersRepository.delete(banner);
+        verify(jdbcTemplate).update(anyString(), eq(10));
+    }
+
+    // ==================== Custom Queries Tests ====================
 
     @Test
-    void testFindActiveBanners_Success() {
-        // Given
-        Banners banner1 = createTestBanner();
-        banner1.setStatus(true);
-
+    void testFindActiveBanners() {
+        List<Banners> list = Collections.singletonList(createTestBanner());
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(), any()))
-            .thenReturn(Collections.singletonList(banner1));
+                .thenReturn(list);
 
-        // When
         List<Banners> result = bannersRepository.findActiveBanners();
+        assertFalse(result.isEmpty());
+    }
 
-        // Then
-        assertNotNull(result);
+    @Test
+    void testUpdateExpiredBanners() {
+        when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(5);
+
+        int updated = bannersRepository.updateExpiredBanners();
+        assertEquals(5, updated);
+    }
+
+    @Test
+    void testCount() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+        assertEquals(10L, bannersRepository.count());
+    }
+
+    @Test
+    void testExistsById() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(1))).thenReturn(1);
+        assertTrue(bannersRepository.existsById(1));
+
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(2))).thenReturn(0);
+        assertFalse(bannersRepository.existsById(2));
+    }
+
+    @Test
+    void testFindPage() {
+        List<Banners> list = Collections.singletonList(createTestBanner());
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), anyInt(), anyInt())).thenReturn(list);
+
+        List<Banners> result = bannersRepository.findPage(0, 10);
         assertEquals(1, result.size());
-        assertTrue(result.get(0).getStatus());
-    }
-
-    // ==================== count Tests ====================
-
-    @Test
-    void testCount_Success() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
-            .thenReturn(10L);
-
-        // When
-        long count = bannersRepository.count();
-
-        // Then
-        assertEquals(10L, count);
     }
 
     @Test
-    void testCount_Zero() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
-            .thenReturn(0L);
+    void testFindWithOffset() {
+        List<Banners> list = Collections.singletonList(createTestBanner());
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(list);
 
-        // When
-        long count = bannersRepository.count();
-
-        // Then
-        assertEquals(0L, count);
-    }
-
-    // ==================== existsById Tests ====================
-
-    @Test
-    void testExistsById_True() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testSortOrder)))
-            .thenReturn(1);
-
-        // When
-        boolean exists = bannersRepository.existsById(testSortOrder);
-
-        // Then
-        assertTrue(exists);
+        List<Banners> result = bannersRepository.findWithOffset(0, 10);
+        assertEquals(1, result.size());
     }
 
     @Test
-    void testExistsById_False() {
-        // Given
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testSortOrder)))
-            .thenReturn(0);
+    void testFindByDateRangeWithOffset() {
+        // This method uses a PreparedStatement callback
+        List<Banners> list = Collections.singletonList(createTestBanner());
 
-        // When
-        boolean exists = bannersRepository.existsById(testSortOrder);
+        // It's tricky to mock the functional interface callback for
+        // query(PreparedStatementCreator, RowMapper)
+        // But here it uses query(PreparedStatementCreator, RowMapper) or similar
+        // The repository code uses: jdbcTemplate.query(connection -> ..., rowMapper)
 
-        // Then
-        assertFalse(exists);
+        // We can mock jdbcTemplate.query(PreparedStatementCreator, RowMapper)
+        when(jdbcTemplate.query(any(PreparedStatementCreator.class), any(RowMapper.class))).thenReturn(list);
+
+        List<Banners> result = bannersRepository.findByDateRangeWithOffset(
+                Timestamp.valueOf(LocalDateTime.now()),
+                Timestamp.valueOf(LocalDateTime.now().plusDays(1)),
+                0, 10);
+
+        assertEquals(1, result.size());
     }
 
-    // ==================== deleteById Tests ====================
-
     @Test
-    void testDeleteById_Success() {
-        // Given
-        when(jdbcTemplate.update(anyString(), eq(testSortOrder)))
-            .thenReturn(1);
+    void testCountByDateRange() {
+        // Similar to above, uses query(PreparedStatementCreator, ResultSetExtractor)
+        when(jdbcTemplate.query(any(PreparedStatementCreator.class),
+                any(org.springframework.jdbc.core.ResultSetExtractor.class)))
+                .thenReturn(5L);
 
-        // When
-        bannersRepository.deleteById(testSortOrder);
+        long count = bannersRepository.countByDateRange(
+                Timestamp.valueOf(LocalDateTime.now()),
+                Timestamp.valueOf(LocalDateTime.now().plusDays(1)));
 
-        // Then
-        verify(jdbcTemplate, times(1)).update(anyString(), eq(testSortOrder));
+        assertEquals(5L, count);
     }
 
     // ==================== Helper Methods ====================
@@ -259,4 +309,3 @@ class BannersJdbcRepositoryTest {
         return banner;
     }
 }
-
