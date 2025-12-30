@@ -294,4 +294,232 @@ class SimpleLoginControllerTest {
         assertEquals(false, body.get("success"));
         assertEquals("密碼錯誤", body.get("message"));
     }
+
+    // ==================== 新增測試用例以提升分支覆蓋率 ====================
+
+    @Test
+    void testLogin_NullAccount() {
+        // Given - account 為 null
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", null);
+        loginRequest.put("password", "password");
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.login(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(false, body.get("success"));
+        assertEquals("帳號不能為空", body.get("message"));
+    }
+
+    @Test
+    void testLogin_NullPassword() {
+        // Given - password 為 null
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "testuser");
+        loginRequest.put("password", null);
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.login(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(false, body.get("success"));
+        assertEquals("密碼不能為空", body.get("message"));
+    }
+
+    @Test
+    void testLogin_AccountStatusNull() {
+        // Given - accountStatus 為 null
+        testUser.setAccountStatus(null);
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "testuser");
+        loginRequest.put("password", "plainPassword");
+
+        when(userRepository.findByAccount("testuser")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("plainPassword", testUser.getPassword())).thenReturn(true);
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.login(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("帳號未啟用或已被停用", body.get("message"));
+    }
+
+    @Test
+    void testLogin_PermissionType2Forbidden() {
+        // Given - permissionType=2 (機構人員) 不能從一般登入頁面登入
+        testUser.setPermissionType((byte) 2);
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "testuser");
+        loginRequest.put("password", "plainPassword");
+
+        when(userRepository.findByAccount("testuser")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("plainPassword", testUser.getPassword())).thenReturn(true);
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.login(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("請由後台頁面登入", body.get("message"));
+    }
+
+    @Test
+    void testAdminLogin_AccountNotFound() {
+        // Given
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "nonexistent");
+        loginRequest.put("password", "password");
+
+        when(userRepository.findByAccount("nonexistent")).thenReturn(Optional.empty());
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.adminlogin(loginRequest);
+
+        // Then
+        assertEquals(404, response.getStatusCodeValue());
+    }
+
+    @Test
+    void testAdminLogin_AccountDisabled() {
+        // Given - 管理員帳號已停用
+        adminUser.setAccountStatus((byte) 2);
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "admin");
+        loginRequest.put("password", "adminPassword");
+
+        when(userRepository.findByAccount("admin")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("adminPassword", adminUser.getPassword())).thenReturn(true);
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.adminlogin(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("帳號未啟用或已被停用", body.get("message"));
+    }
+
+    @Test
+    void testAdminLogin_EmptyPassword() {
+        // Given
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "admin");
+        loginRequest.put("password", "");
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.adminlogin(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("密碼不能為空", body.get("message"));
+    }
+
+    @Test
+    void testAdminLogin_AccountStatusNull() {
+        // Given - 管理員 accountStatus 為 null
+        adminUser.setAccountStatus(null);
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "admin");
+        loginRequest.put("password", "adminPassword");
+
+        when(userRepository.findByAccount("admin")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("adminPassword", adminUser.getPassword())).thenReturn(true);
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.adminlogin(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("帳號未啟用或已被停用", body.get("message"));
+    }
+
+    @Test
+    void testAdminLogin_PermissionType2Allowed() {
+        // Given - permissionType=2 (機構人員) 可以從管理員登入頁面登入
+        adminUser.setPermissionType((byte) 2);
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "admin");
+        loginRequest.put("password", "adminPassword");
+
+        when(userRepository.findByAccount("admin")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("adminPassword", adminUser.getPassword())).thenReturn(true);
+        when(jwtUtil.generateToken(adminUser)).thenReturn("institution.jwt.token");
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.adminlogin(loginRequest);
+
+        // Then
+        assertEquals(200, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(true, body.get("success"));
+        assertEquals("登入成功", body.get("message"));
+    }
+
+    @Test
+    void testAdminLogin_NullPassword() {
+        // Given
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "admin");
+        loginRequest.put("password", null);
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.adminlogin(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("密碼不能為空", body.get("message"));
+    }
+
+    @Test
+    void testLogin_WhitespaceOnlyAccount() {
+        // Given - 帳號只有空格
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "   ");
+        loginRequest.put("password", "password");
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.login(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("帳號不能為空", body.get("message"));
+    }
+
+    @Test
+    void testLogin_WhitespaceOnlyPassword() {
+        // Given - 密碼只有空格
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("account", "testuser");
+        loginRequest.put("password", "   ");
+
+        // When
+        ResponseEntity<Map<String, Object>> response = controller.login(loginRequest);
+
+        // Then
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, Object> body = response.getBody();
+        assertEquals(false, body.get("success"));
+        assertEquals("密碼不能為空", body.get("message"));
+    }
 }

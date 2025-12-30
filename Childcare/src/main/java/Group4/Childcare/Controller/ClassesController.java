@@ -113,17 +113,19 @@ public class ClassesController {
             System.out.println("Updating class with ID: " + id);
             System.out.println("Received entity: " + entity);
 
-            // 確保 ID 一致
             entity.setClassID(id);
             Classes updatedClass = service.update(id, entity);
             return ResponseEntity.ok(updatedClass);
         } catch (RuntimeException e) {
-            // 業務邏輯錯誤（如記錄不存在）
-            System.err.println("Business logic error: " + e.getMessage());
+            // treat known not-found messages as 404, otherwise 500
+            if ("班級不存在".equals(e.getMessage())) {
+                System.err.println("Business logic error: " + e.getMessage());
+                return ResponseEntity.notFound().build();
+            }
+            System.err.println("System error during update: " + e.getMessage());
             e.printStackTrace();
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.internalServerError().build();
         } catch (Exception e) {
-            // 其他系統錯誤
             System.err.println("System error during update: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.internalServerError().build();

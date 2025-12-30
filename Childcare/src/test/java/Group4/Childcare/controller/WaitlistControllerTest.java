@@ -37,307 +37,470 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class WaitlistControllerTest {
 
-    @Mock
-    private WaitlistJdbcRepository waitlistJdbcRepository;
+        @Mock
+        private WaitlistJdbcRepository waitlistJdbcRepository;
 
-    @Mock
-    private EmailService emailService;
+        @Mock
+        private EmailService emailService;
 
-    @InjectMocks
-    private WaitlistController controller;
+        @InjectMocks
+        private WaitlistController controller;
 
-    private MockMvc mockMvc;
-    private ObjectMapper objectMapper;
-    private UUID testInstitutionId;
-    private UUID testApplicationId;
-    private UUID testClassId;
+        private MockMvc mockMvc;
+        private ObjectMapper objectMapper;
+        private UUID testInstitutionId;
+        private UUID testApplicationId;
+        private UUID testClassId;
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
-        objectMapper = new ObjectMapper();
+        @BeforeEach
+        void setUp() {
+                mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+                objectMapper = new ObjectMapper();
 
-        testInstitutionId = UUID.randomUUID();
-        testApplicationId = UUID.randomUUID();
-        testClassId = UUID.randomUUID();
-    }
+                testInstitutionId = UUID.randomUUID();
+                testApplicationId = UUID.randomUUID();
+                testClassId = UUID.randomUUID();
+        }
 
-    // ===== getWaitlistByInstitution 測試 =====
-    @Test
-    void testGetWaitlistByInstitution_WithParams() throws Exception {
-        List<Map<String, Object>> waitlist = new ArrayList<>();
-        Map<String, Object> item = new HashMap<>();
-        item.put("Name", "測試幼兒");
-        item.put("CurrentOrder", 1);
-        waitlist.add(item);
+        // ===== getWaitlistByInstitution 測試 =====
+        @Test
+        void testGetWaitlistByInstitution_WithParams() throws Exception {
+                List<Map<String, Object>> waitlist = new ArrayList<>();
+                Map<String, Object> item = new HashMap<>();
+                item.put("Name", "測試幼兒");
+                item.put("CurrentOrder", 1);
+                waitlist.add(item);
 
-        when(waitlistJdbcRepository.findWaitlistByInstitution(anyString(), anyString()))
-                .thenReturn(waitlist);
+                when(waitlistJdbcRepository.findWaitlistByInstitution(anyString(), anyString()))
+                                .thenReturn(waitlist);
 
-        mockMvc.perform(get("/waitlist/by-institution")
-                .param("institutionId", testInstitutionId.toString())
-                .param("name", "測試")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
-    }
+                mockMvc.perform(get("/waitlist/by-institution")
+                                .param("institutionId", testInstitutionId.toString())
+                                .param("name", "測試")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(1)));
+        }
 
-    @Test
-    void testGetWaitlistByInstitution_NoParams() throws Exception {
-        List<Map<String, Object>> waitlist = new ArrayList<>();
-        when(waitlistJdbcRepository.findWaitlistByInstitution(any(), any()))
-                .thenReturn(waitlist);
+        @Test
+        void testGetWaitlistByInstitution_NoParams() throws Exception {
+                List<Map<String, Object>> waitlist = new ArrayList<>();
+                when(waitlistJdbcRepository.findWaitlistByInstitution(any(), any()))
+                                .thenReturn(waitlist);
 
-        mockMvc.perform(get("/waitlist/by-institution")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
-    }
+                mockMvc.perform(get("/waitlist/by-institution")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk());
+        }
 
-    @Test
-    void testGetWaitlistByInstitution_EmptyResult() throws Exception {
-        when(waitlistJdbcRepository.findWaitlistByInstitution(anyString(), any()))
-                .thenReturn(Collections.emptyList());
+        @Test
+        void testGetWaitlistByInstitution_EmptyResult() throws Exception {
+                when(waitlistJdbcRepository.findWaitlistByInstitution(anyString(), any()))
+                                .thenReturn(Collections.emptyList());
 
-        mockMvc.perform(get("/waitlist/by-institution")
-                .param("institutionId", testInstitutionId.toString())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
-    }
+                mockMvc.perform(get("/waitlist/by-institution")
+                                .param("institutionId", testInstitutionId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(0)));
+        }
 
-    // ===== conductLottery 測試 =====
-    @Test
-    void testConductLottery_Success() throws Exception {
-        LotteryRequest request = new LotteryRequest();
-        request.setInstitutionId(testInstitutionId);
+        // ===== conductLottery 測試 =====
+        @Test
+        void testConductLottery_Success() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
 
-        // Mock repository responses
-        when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
-        when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(50);
+                // Mock repository responses
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(50);
 
-        Map<Integer, Integer> acceptedCount = new HashMap<>();
-        acceptedCount.put(1, 5);
-        acceptedCount.put(2, 3);
-        acceptedCount.put(3, 10);
-        when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 5);
+                acceptedCount.put(2, 3);
+                acceptedCount.put(3, 10);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
-        Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
-        applicantsByPriority.put(1, new ArrayList<>());
-        applicantsByPriority.put(2, new ArrayList<>());
-        applicantsByPriority.put(3, new ArrayList<>());
-        when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
-                .thenReturn(applicantsByPriority);
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                List<Map<String, Object>> p1 = new ArrayList<>();
+                Map<String, Object> applicant1 = new HashMap<>();
+                applicant1.put("ApplicantName", "Test Applicant");
+                applicant1.put("Email", "test@example.com");
+                applicant1.put("BirthDate", java.sql.Date.valueOf("2020-01-01"));
+                p1.add(applicant1);
+                applicantsByPriority.put(1, p1);
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, new ArrayList<>());
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenReturn(applicantsByPriority);
 
-        when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+                // Mock class finding
+                when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
 
-        mockMvc.perform(post("/waitlist/lottery")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)));
-    }
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
 
-    @Test
-    void testConductLottery_NoAvailableSlots() throws Exception {
-        LotteryRequest request = new LotteryRequest();
-        request.setInstitutionId(testInstitutionId);
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)));
 
-        when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
-        when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(100);
+                // Verify email service was called
+                verify(emailService, atLeastOnce()).sendApplicationStatusChangeEmail(
+                                any(), any(), any(), any(), any(), any(), any(), any(), any());
+        }
 
-        Map<Integer, Integer> acceptedCount = new HashMap<>();
-        acceptedCount.put(1, 20);
-        acceptedCount.put(2, 10);
-        acceptedCount.put(3, 70);
-        when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+        @Test
+        void testConductLottery_NoAvailableSlots() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
 
-        Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
-        applicantsByPriority.put(1, new ArrayList<>());
-        applicantsByPriority.put(2, new ArrayList<>());
-        applicantsByPriority.put(3, new ArrayList<>());
-        when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
-                .thenReturn(applicantsByPriority);
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(100);
 
-        when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 20);
+                acceptedCount.put(2, 10);
+                acceptedCount.put(3, 70);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
-        mockMvc.perform(post("/waitlist/lottery")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)));
-    }
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                applicantsByPriority.put(1, new ArrayList<>());
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, new ArrayList<>());
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenReturn(applicantsByPriority);
 
-    // ===== manualAdmit 測試 =====
-    @Test
-    void testManualAdmit_Success() throws Exception {
-        ManualAdmissionRequest request = new ManualAdmissionRequest();
-        request.setApplicationId(testApplicationId);
-        request.setNationalId("A123456789");
-        request.setClassId(testClassId);
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
 
-        List<Map<String, Object>> applicants = new ArrayList<>();
-        Map<String, Object> applicant = new HashMap<>();
-        applicant.put("NationalID", "A123456789");
-        applicant.put("CurrentOrder", 1);
-        applicants.add(applicant);
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)));
+        }
 
-        when(waitlistJdbcRepository.getWaitlistApplicants(testApplicationId)).thenReturn(applicants);
-        when(waitlistJdbcRepository.manualAdmit(eq(testApplicationId), eq("A123456789"), eq(testClassId)))
-                .thenReturn(true);
+        // ===== manualAdmit 測試 =====
+        @Test
+        void testManualAdmit_Success() throws Exception {
+                ManualAdmissionRequest request = new ManualAdmissionRequest();
+                request.setApplicationId(testApplicationId);
+                request.setNationalId("A123456789");
+                request.setClassId(testClassId);
 
-        mockMvc.perform(post("/waitlist/manual-admit")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.message", is("錄取成功")));
-    }
+                List<Map<String, Object>> applicants = new ArrayList<>();
+                Map<String, Object> applicant = new HashMap<>();
+                applicant.put("NationalID", "A123456789");
+                applicant.put("CurrentOrder", 1);
+                applicants.add(applicant);
 
-    @Test
-    void testManualAdmit_ClassFull() throws Exception {
-        ManualAdmissionRequest request = new ManualAdmissionRequest();
-        request.setApplicationId(testApplicationId);
-        request.setNationalId("A123456789");
-        request.setClassId(testClassId);
+                when(waitlistJdbcRepository.getWaitlistApplicants(testApplicationId)).thenReturn(applicants);
+                when(waitlistJdbcRepository.manualAdmit(eq(testApplicationId), eq("A123456789"), eq(testClassId)))
+                                .thenReturn(true);
 
-        List<Map<String, Object>> applicants = new ArrayList<>();
-        Map<String, Object> applicant = new HashMap<>();
-        applicant.put("NationalID", "A123456789");
-        applicant.put("CurrentOrder", 1);
-        applicants.add(applicant);
+                mockMvc.perform(post("/waitlist/manual-admit")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)))
+                                .andExpect(jsonPath("$.message", is("錄取成功")));
+        }
 
-        when(waitlistJdbcRepository.getWaitlistApplicants(testApplicationId)).thenReturn(applicants);
-        when(waitlistJdbcRepository.manualAdmit(eq(testApplicationId), eq("A123456789"), eq(testClassId)))
-                .thenReturn(false);
+        @Test
+        void testManualAdmit_ClassFull() throws Exception {
+                ManualAdmissionRequest request = new ManualAdmissionRequest();
+                request.setApplicationId(testApplicationId);
+                request.setNationalId("A123456789");
+                request.setClassId(testClassId);
 
-        mockMvc.perform(post("/waitlist/manual-admit")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.message", is("錄取失敗：班級已滿")));
-    }
+                List<Map<String, Object>> applicants = new ArrayList<>();
+                Map<String, Object> applicant = new HashMap<>();
+                applicant.put("NationalID", "A123456789");
+                applicant.put("CurrentOrder", 1);
+                applicants.add(applicant);
 
-    @Test
-    void testManualAdmit_SkippingOrder() throws Exception {
-        ManualAdmissionRequest request = new ManualAdmissionRequest();
-        request.setApplicationId(testApplicationId);
-        request.setNationalId("B987654321");
-        request.setClassId(testClassId);
+                when(waitlistJdbcRepository.getWaitlistApplicants(testApplicationId)).thenReturn(applicants);
+                when(waitlistJdbcRepository.manualAdmit(eq(testApplicationId), eq("A123456789"), eq(testClassId)))
+                                .thenReturn(false);
 
-        List<Map<String, Object>> applicants = new ArrayList<>();
-        Map<String, Object> applicant1 = new HashMap<>();
-        applicant1.put("NationalID", "A123456789");
-        applicant1.put("CurrentOrder", 1);
-        Map<String, Object> applicant2 = new HashMap<>();
-        applicant2.put("NationalID", "B987654321");
-        applicant2.put("CurrentOrder", 2);
-        applicants.add(applicant1);
-        applicants.add(applicant2);
+                mockMvc.perform(post("/waitlist/manual-admit")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(false)))
+                                .andExpect(jsonPath("$.message", is("錄取失敗：班級已滿")));
+        }
 
-        List<Map<String, Object>> violations = new ArrayList<>();
-        violations.add(applicant1);
+        @Test
+        void testManualAdmit_SkippingOrder() throws Exception {
+                ManualAdmissionRequest request = new ManualAdmissionRequest();
+                request.setApplicationId(testApplicationId);
+                request.setNationalId("B987654321");
+                request.setClassId(testClassId);
 
-        when(waitlistJdbcRepository.getWaitlistApplicants(testApplicationId)).thenReturn(applicants);
-        when(waitlistJdbcRepository.checkAdmissionOrderViolation(testApplicationId, 2))
-                .thenReturn(violations);
-        when(waitlistJdbcRepository.manualAdmit(eq(testApplicationId), eq("B987654321"), eq(testClassId)))
-                .thenReturn(true);
+                List<Map<String, Object>> applicants = new ArrayList<>();
+                Map<String, Object> applicant1 = new HashMap<>();
+                applicant1.put("NationalID", "A123456789");
+                applicant1.put("CurrentOrder", 1);
+                Map<String, Object> applicant2 = new HashMap<>();
+                applicant2.put("NationalID", "B987654321");
+                applicant2.put("CurrentOrder", 2);
+                applicants.add(applicant1);
+                applicants.add(applicant2);
 
-        mockMvc.perform(post("/waitlist/manual-admit")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.warning", containsString("1 位候補者未錄取")));
-    }
+                List<Map<String, Object>> violations = new ArrayList<>();
+                violations.add(applicant1);
 
-    // ===== assignWaitlistOrder 測試 =====
-    @Test
-    void testAssignWaitlistOrder_Success() throws Exception {
-        when(waitlistJdbcRepository.getNextWaitlistOrder(testInstitutionId)).thenReturn(5);
+                when(waitlistJdbcRepository.getWaitlistApplicants(testApplicationId)).thenReturn(applicants);
+                when(waitlistJdbcRepository.checkAdmissionOrderViolation(testApplicationId, 2))
+                                .thenReturn(violations);
+                when(waitlistJdbcRepository.manualAdmit(eq(testApplicationId), eq("B987654321"), eq(testClassId)))
+                                .thenReturn(true);
 
-        mockMvc.perform(post("/waitlist/assign-order")
-                .param("institutionId", testInstitutionId.toString())
-                .param("applicationId", testApplicationId.toString())
-                .param("nationalId", "A123456789")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.currentOrder", is(5)));
-    }
+                mockMvc.perform(post("/waitlist/manual-admit")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)))
+                                .andExpect(jsonPath("$.warning", containsString("1 位候補者未錄取")));
+        }
 
-    @Test
-    void testAssignWaitlistOrder_Exception() throws Exception {
-        when(waitlistJdbcRepository.getNextWaitlistOrder(testInstitutionId))
-                .thenThrow(new RuntimeException("Database error"));
+        // ===== assignWaitlistOrder 測試 =====
+        @Test
+        void testAssignWaitlistOrder_Success() throws Exception {
+                when(waitlistJdbcRepository.getNextWaitlistOrder(testInstitutionId)).thenReturn(5);
 
-        mockMvc.perform(post("/waitlist/assign-order")
-                .param("institutionId", testInstitutionId.toString())
-                .param("applicationId", testApplicationId.toString())
-                .param("nationalId", "A123456789")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.success", is(false)));
-    }
+                mockMvc.perform(post("/waitlist/assign-order")
+                                .param("institutionId", testInstitutionId.toString())
+                                .param("applicationId", testApplicationId.toString())
+                                .param("nationalId", "A123456789")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)))
+                                .andExpect(jsonPath("$.currentOrder", is(5)));
+        }
 
-    // ===== resetLottery 測試 =====
-    @Test
-    void testResetLottery_Success() throws Exception {
-        doNothing().when(waitlistJdbcRepository).resetAllWaitlistOrders(testInstitutionId);
+        @Test
+        void testAssignWaitlistOrder_Exception() throws Exception {
+                when(waitlistJdbcRepository.getNextWaitlistOrder(testInstitutionId))
+                                .thenThrow(new RuntimeException("Database error"));
 
-        mockMvc.perform(post("/waitlist/reset-lottery")
-                .param("institutionId", testInstitutionId.toString())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.message", containsString("已重置")));
-    }
+                mockMvc.perform(post("/waitlist/assign-order")
+                                .param("institutionId", testInstitutionId.toString())
+                                .param("applicationId", testApplicationId.toString())
+                                .param("nationalId", "A123456789")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.success", is(false)));
+        }
 
-    @Test
-    void testResetLottery_Exception() throws Exception {
-        doThrow(new RuntimeException("Database error"))
-                .when(waitlistJdbcRepository).resetAllWaitlistOrders(testInstitutionId);
+        // ===== resetLottery 測試 =====
+        @Test
+        void testResetLottery_Success() throws Exception {
+                doNothing().when(waitlistJdbcRepository).resetAllWaitlistOrders(testInstitutionId);
 
-        mockMvc.perform(post("/waitlist/reset-lottery")
-                .param("institutionId", testInstitutionId.toString())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.success", is(false)));
-    }
+                mockMvc.perform(post("/waitlist/reset-lottery")
+                                .param("institutionId", testInstitutionId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)))
+                                .andExpect(jsonPath("$.message", containsString("已重置")));
+        }
 
-    // ===== getWaitlistStatistics 測試 =====
-    @Test
-    void testGetWaitlistStatistics_Success() throws Exception {
-        Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
-        applicantsByPriority.put(1, Arrays.asList(new HashMap<>(), new HashMap<>()));
-        applicantsByPriority.put(2, Arrays.asList(new HashMap<>()));
-        applicantsByPriority.put(3, Arrays.asList(new HashMap<>(), new HashMap<>(), new HashMap<>()));
+        @Test
+        void testResetLottery_Exception() throws Exception {
+                doThrow(new RuntimeException("Database error"))
+                                .when(waitlistJdbcRepository).resetAllWaitlistOrders(testInstitutionId);
 
-        when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
-                .thenReturn(applicantsByPriority);
-        when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
-        when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+                mockMvc.perform(post("/waitlist/reset-lottery")
+                                .param("institutionId", testInstitutionId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.success", is(false)));
+        }
 
-        mockMvc.perform(get("/waitlist/statistics")
-                .param("institutionId", testInstitutionId.toString())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalCapacity", is(100)))
-                .andExpect(jsonPath("$.firstPriorityCount", is(2)))
-                .andExpect(jsonPath("$.secondPriorityCount", is(1)))
-                .andExpect(jsonPath("$.thirdPriorityCount", is(3)));
-    }
+        // ===== getWaitlistStatistics 測試 =====
+        @Test
+        void testGetWaitlistStatistics_Success() throws Exception {
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                applicantsByPriority.put(1, Arrays.asList(new HashMap<>(), new HashMap<>()));
+                applicantsByPriority.put(2, Arrays.asList(new HashMap<>()));
+                applicantsByPriority.put(3, Arrays.asList(new HashMap<>(), new HashMap<>(), new HashMap<>()));
 
-    @Test
-    void testGetWaitlistStatistics_Exception() throws Exception {
-        when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
-                .thenThrow(new RuntimeException("Database error"));
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenReturn(applicantsByPriority);
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
 
-        mockMvc.perform(get("/waitlist/statistics")
-                .param("institutionId", testInstitutionId.toString())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.success", is(false)));
-    }
+                mockMvc.perform(get("/waitlist/statistics")
+                                .param("institutionId", testInstitutionId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.totalCapacity", is(100)))
+                                .andExpect(jsonPath("$.firstPriorityCount", is(2)))
+                                .andExpect(jsonPath("$.secondPriorityCount", is(1)))
+                                .andExpect(jsonPath("$.thirdPriorityCount", is(3)));
+        }
+
+        @Test
+        void testGetWaitlistStatistics_Exception() throws Exception {
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenThrow(new RuntimeException("Database error"));
+
+                mockMvc.perform(get("/waitlist/statistics")
+                                .param("institutionId", testInstitutionId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.success", is(false)));
+        }
+
+        @Test
+        void testConductLottery_EmailServiceError() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
+
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(50);
+
+                Map<Integer, Integer> acceptedCount = new HashMap<>(); // All 0
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                List<Map<String, Object>> p1 = new ArrayList<>();
+                Map<String, Object> applicant1 = new HashMap<>();
+                applicant1.put("ApplicantName", "Test Applicant");
+                applicant1.put("Email", "test@example.com");
+                applicant1.put("BirthDate", java.sql.Date.valueOf("2020-01-01"));
+                p1.add(applicant1);
+
+                applicantsByPriority.put(1, p1);
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, new ArrayList<>());
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenReturn(applicantsByPriority);
+
+                // Mock class info
+                List<Map<String, Object>> classes = new ArrayList<>();
+                Map<String, Object> classA = new HashMap<>();
+                classA.put("ClassID", testClassId.toString());
+                classA.put("CurrentStudents", 10);
+                classes.add(classA);
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(classes);
+
+                // Mock suitable class found
+                when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
+
+                // Mock email error
+                doThrow(new jakarta.mail.MessagingException("Mail Error")).when(emailService)
+                                .sendApplicationStatusChangeEmail(any(), any(), any(), any(), any(), any(), any(),
+                                                any(), any());
+
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk()) // Operations should succeed even if email fails
+                                .andExpect(jsonPath("$.success", is(true)));
+        }
+
+        @Test
+        void testConductLottery_ClassFullForSpecificApplicant() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
+
+                // Mock capacity allows admission globally (5 slots available)
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(5);
+
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+
+                // One applicant
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                List<Map<String, Object>> p1 = new ArrayList<>();
+                Map<String, Object> applicant1 = new HashMap<>();
+                applicant1.put("ApplicantName", "Test Applicant");
+                applicant1.put("BirthDate", java.sql.Date.valueOf("2020-01-01"));
+                p1.add(applicant1);
+                applicantsByPriority.put(1, p1);
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, new ArrayList<>());
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenReturn(applicantsByPriority);
+
+                // Mock suitable class found BUT full capacity specific to this class
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+                when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(false); // Class full!
+
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)))
+                                // Should be waitlisted because class is full
+                                // firstPriorityAccepted is 0 because the only applicant was waitlisted
+                                .andExpect(jsonPath("$.firstPriorityAccepted", is(0)))
+                                .andExpect(jsonPath("$.waitlisted", is(1)));
+        }
+
+        @Test
+        void testConductLottery_BirthDateParsing() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
+
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(50);
+
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+
+                // Applicants with different BirthDate formats
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                List<Map<String, Object>> p1 = new ArrayList<>();
+
+                Map<String, Object> appDate = new HashMap<>();
+                appDate.put("ApplicantName", "SQL Date");
+                appDate.put("BirthDate", java.sql.Date.valueOf("2020-01-01"));
+                p1.add(appDate);
+
+                Map<String, Object> appLocalDate = new HashMap<>();
+                appLocalDate.put("ApplicantName", "Local Date");
+                appLocalDate.put("BirthDate", java.time.LocalDate.of(2020, 1, 2));
+                p1.add(appLocalDate);
+
+                Map<String, Object> appNull = new HashMap<>();
+                appNull.put("ApplicantName", "No Date");
+                appNull.put("BirthDate", null);
+                p1.add(appNull);
+
+                applicantsByPriority.put(1, p1);
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, new ArrayList<>());
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
+                                .thenReturn(applicantsByPriority);
+
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+                when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
+
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                // SQL Date & LocalDate -> Accepted (2)
+                                // Null Date -> Waitlisted (1)
+                                .andExpect(jsonPath("$.firstPriorityAccepted", is(2)))
+                                .andExpect(jsonPath("$.waitlisted", is(1)));
+        }
 }

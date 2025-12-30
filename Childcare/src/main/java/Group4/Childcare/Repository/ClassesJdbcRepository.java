@@ -25,7 +25,7 @@ public class ClassesJdbcRepository {
     private static final String TABLE_NAME = "classes";
 
     // RowMapper for Classes entity
-    private static final RowMapper<Classes> CLASSES_ROW_MAPPER = (rs, _) -> {
+    private static final RowMapper<Classes> CLASSES_ROW_MAPPER = (rs, rowNum) -> {
         Classes classes = new Classes();
         classes.setClassID(UUID.fromString(rs.getString("ClassID")));
         classes.setClassName(rs.getString("ClassName"));
@@ -63,7 +63,7 @@ public class ClassesJdbcRepository {
     };
 
     // RowMapper for ClassNameDTO (only class name)
-    private static final RowMapper<ClassNameDTO> CLASS_NAME_ROW_MAPPER = (rs, _) -> {
+    private static final RowMapper<ClassNameDTO> CLASS_NAME_ROW_MAPPER = (rs, rowNum) -> {
         ClassNameDTO dto = new ClassNameDTO();
         String classIdStr = rs.getString("ClassID");
         if (classIdStr != null) {
@@ -74,7 +74,7 @@ public class ClassesJdbcRepository {
     };
 
     // RowMapper for ClassSummaryDTO (includes institution name via LEFT JOIN)
-    private static final RowMapper<ClassSummaryDTO> CLASS_SUMMARY_ROW_MAPPER = (rs, _) -> {
+    private static final RowMapper<ClassSummaryDTO> CLASS_SUMMARY_ROW_MAPPER = (rs, rowNum) -> {
         ClassSummaryDTO dto = new ClassSummaryDTO();
         String classIdStr = rs.getString("ClassID");
         if (classIdStr != null) {
@@ -128,19 +128,19 @@ public class ClassesJdbcRepository {
     // Insert method
     private Classes insert(Classes classes) {
         String sql = "INSERT INTO " + TABLE_NAME +
-                    " (ClassID, ClassName, Capacity, CurrentStudents, MinAgeDescription, MaxAgeDescription, AdditionalInfo, InstitutionID) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                " (ClassID, ClassName, Capacity, CurrentStudents, MinAgeDescription, MaxAgeDescription, AdditionalInfo, InstitutionID) "
+                +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         jdbcTemplate.update(sql,
-            classes.getClassID().toString(),
-            classes.getClassName(),
-            classes.getCapacity(),
-            classes.getCurrentStudents(),
-            classes.getMinAgeDescription(),
-            classes.getMaxAgeDescription(),
-            classes.getAdditionalInfo(),
-            classes.getInstitutionID() != null ? classes.getInstitutionID().toString() : null
-        );
+                classes.getClassID().toString(),
+                classes.getClassName(),
+                classes.getCapacity(),
+                classes.getCurrentStudents(),
+                classes.getMinAgeDescription(),
+                classes.getMaxAgeDescription(),
+                classes.getAdditionalInfo(),
+                classes.getInstitutionID() != null ? classes.getInstitutionID().toString() : null);
 
         return classes;
     }
@@ -148,19 +148,18 @@ public class ClassesJdbcRepository {
     // Update method
     private Classes update(Classes classes) {
         String sql = "UPDATE " + TABLE_NAME +
-                    " SET ClassName = ?, Capacity = ?, CurrentStudents = ?, MinAgeDescription = ?, " +
-                    "MaxAgeDescription = ?, AdditionalInfo = ?, InstitutionID = ? WHERE ClassID = ?";
+                " SET ClassName = ?, Capacity = ?, CurrentStudents = ?, MinAgeDescription = ?, " +
+                "MaxAgeDescription = ?, AdditionalInfo = ?, InstitutionID = ? WHERE ClassID = ?";
 
         jdbcTemplate.update(sql,
-            classes.getClassName(),
-            classes.getCapacity(),
-            classes.getCurrentStudents(),
-            classes.getMinAgeDescription(),
-            classes.getMaxAgeDescription(),
-            classes.getAdditionalInfo(),
-            classes.getInstitutionID() != null ? classes.getInstitutionID().toString() : null,
-            classes.getClassID().toString()
-        );
+                classes.getClassName(),
+                classes.getCapacity(),
+                classes.getCurrentStudents(),
+                classes.getMinAgeDescription(),
+                classes.getMaxAgeDescription(),
+                classes.getAdditionalInfo(),
+                classes.getInstitutionID() != null ? classes.getInstitutionID().toString() : null,
+                classes.getClassID().toString());
 
         return classes;
     }
@@ -190,9 +189,10 @@ public class ClassesJdbcRepository {
 
     // Find all with institution name using LEFT JOIN
     public List<ClassSummaryDTO> findAllWithInstitutionName() {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
-                     "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
-                     "WHERE i.accountStatus = 1";
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.AdditionalInfo, i.InstitutionName, i.InstitutionID "
+                +
+                "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
+                "WHERE i.accountStatus = 1";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER);
     }
 
@@ -234,29 +234,34 @@ public class ClassesJdbcRepository {
 
     // 使用offset分頁查詢，包含機構名稱 - 一次取指定筆數
     public List<ClassSummaryDTO> findWithOffsetAndInstitutionName(int offset, int limit) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
-                     "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
-                     "ORDER BY c.ClassID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID "
+                +
+                "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
+                "ORDER BY c.ClassID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER, offset, limit);
     }
 
     /**
      * 使用offset分頁查詢，根據機構 ID 過濾（admin 角色使用）
-     * @param offset 分頁偏移量
-     * @param limit 每頁筆數
+     * 
+     * @param offset        分頁偏移量
+     * @param limit         每頁筆數
      * @param institutionID 機構 ID
      * @return 班級列表
      */
-    public List<ClassSummaryDTO> findWithOffsetAndInstitutionNameByInstitutionID(int offset, int limit, UUID institutionID) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
-                     "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
-                     "WHERE c.InstitutionID = ? " +
-                     "ORDER BY c.ClassID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+    public List<ClassSummaryDTO> findWithOffsetAndInstitutionNameByInstitutionID(int offset, int limit,
+            UUID institutionID) {
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID "
+                +
+                "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
+                "WHERE c.InstitutionID = ? " +
+                "ORDER BY c.ClassID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER, institutionID.toString(), offset, limit);
     }
 
     /**
      * 取得指定機構的班級總數（用於分頁計算）
+     * 
      * @param institutionID 機構 ID
      * @return 班級總數
      */
@@ -268,25 +273,26 @@ public class ClassesJdbcRepository {
 
     /**
      * 依機構名稱模糊搜尋，返回機構及其班級資料
+     * 
      * @param institutionName 機構名稱關鍵字
      * @return List<Map<String, Object>>，包含機構資料和班級列表
      */
     public List<java.util.Map<String, Object>> findInstitutionsWithClassesByName(String institutionName) {
         String sql = """
-            SELECT
-                i.InstitutionID, i.InstitutionName, i.ContactPerson, i.Address,
-                i.PhoneNumber, i.Fax, i.Email, i.RelatedLinks, i.Description,
-                i.ResponsiblePerson, i.ImagePath, i.CreatedUser, i.CreatedTime,
-                i.UpdatedUser, i.UpdatedTime, i.Latitude, i.Longitude,
-                c.ClassID, c.ClassName, c.Capacity, c.CurrentStudents,
-                c.MinAgeDescription, c.MaxAgeDescription, c.AdditionalInfo
-            FROM institutions i
-            LEFT JOIN classes c ON i.InstitutionID = c.InstitutionID
-            WHERE i.InstitutionName LIKE ?
-            ORDER BY i.InstitutionName, c.ClassName
-            """;
+                SELECT
+                    i.InstitutionID, i.InstitutionName, i.ContactPerson, i.Address,
+                    i.PhoneNumber, i.Fax, i.Email, i.RelatedLinks, i.Description,
+                    i.ResponsiblePerson, i.ImagePath, i.CreatedUser, i.CreatedTime,
+                    i.UpdatedUser, i.UpdatedTime, i.Latitude, i.Longitude,
+                    c.ClassID, c.ClassName, c.Capacity, c.CurrentStudents,
+                    c.MinAgeDescription, c.MaxAgeDescription, c.AdditionalInfo
+                FROM institutions i
+                LEFT JOIN classes c ON i.InstitutionID = c.InstitutionID
+                WHERE i.InstitutionName LIKE ?
+                ORDER BY i.InstitutionName, c.ClassName
+                """;
 
-        return jdbcTemplate.query(sql, (rs, _) -> {
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
             java.util.Map<String, Object> result = new java.util.HashMap<>();
 
             // Institution data
@@ -329,26 +335,29 @@ public class ClassesJdbcRepository {
 
     /**
      * 依機構名稱模糊搜尋班級，回傳 ClassSummaryDTO 列表
+     * 
      * @param institutionName 機構名稱關鍵字
      * @return List<ClassSummaryDTO>
      */
     public List<ClassSummaryDTO> findClassesByInstitutionName(String institutionName) {
-        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID " +
-                     "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
-                     "WHERE i.InstitutionName LIKE ? " +
-                     "ORDER BY i.InstitutionName, c.ClassName";
+        String sql = "SELECT c.ClassID, c.ClassName, c.Capacity, c.MinAgeDescription, c.MaxAgeDescription, c.CurrentStudents, c.AdditionalInfo, i.InstitutionName, i.InstitutionID "
+                +
+                "FROM " + TABLE_NAME + " c LEFT JOIN institutions i ON c.InstitutionID = i.InstitutionID " +
+                "WHERE i.InstitutionName LIKE ? " +
+                "ORDER BY i.InstitutionName, c.ClassName";
         return jdbcTemplate.query(sql, CLASS_SUMMARY_ROW_MAPPER, "%" + institutionName + "%");
     }
 
     /**
      * 根據機構UUID查詢該機構的所有班級名稱
+     * 
      * @param institutionId 機構UUID
      * @return List<ClassNameDTO> 班級名稱列表
      */
     public List<ClassNameDTO> findClassNamesByInstitutionId(UUID institutionId) {
         String sql = "SELECT c.ClassID, c.ClassName FROM " + TABLE_NAME + " c " +
-                     "WHERE c.InstitutionID = ? " +
-                     "ORDER BY c.ClassName";
+                "WHERE c.InstitutionID = ? " +
+                "ORDER BY c.ClassName";
         return jdbcTemplate.query(sql, CLASS_NAME_ROW_MAPPER, institutionId.toString());
     }
 
@@ -357,7 +366,7 @@ public class ClassesJdbcRepository {
      */
     public boolean incrementCurrentStudents(UUID classId) {
         String sql = "UPDATE " + TABLE_NAME + " SET CurrentStudents = COALESCE(CurrentStudents, 0) + 1 " +
-                     "WHERE ClassID = ? AND (Capacity IS NULL OR COALESCE(CurrentStudents, 0) < Capacity)";
+                "WHERE ClassID = ? AND (Capacity IS NULL OR COALESCE(CurrentStudents, 0) < Capacity)";
         int rowsAffected = jdbcTemplate.update(sql, classId.toString());
         return rowsAffected > 0;
     }
@@ -366,8 +375,10 @@ public class ClassesJdbcRepository {
      * 減少班級當前學生數（避免負值）
      */
     public boolean decrementCurrentStudents(UUID classId) {
-        String sql = "UPDATE " + TABLE_NAME + " SET CurrentStudents = CASE WHEN COALESCE(CurrentStudents,0) > 0 THEN COALESCE(CurrentStudents,0) - 1 ELSE 0 END " +
-                     "WHERE ClassID = ?";
+        String sql = "UPDATE " + TABLE_NAME
+                + " SET CurrentStudents = CASE WHEN COALESCE(CurrentStudents,0) > 0 THEN COALESCE(CurrentStudents,0) - 1 ELSE 0 END "
+                +
+                "WHERE ClassID = ?";
         int rowsAffected = jdbcTemplate.update(sql, classId.toString());
         return rowsAffected > 0;
     }
@@ -376,8 +387,9 @@ public class ClassesJdbcRepository {
      * 檢查班級是否已滿（以 Capacity 為上限）
      */
     public boolean isClassFull(UUID classId) {
-        String sql = "SELECT CASE WHEN Capacity IS NOT NULL AND COALESCE(CurrentStudents,0) >= Capacity THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END " +
-                     "FROM " + TABLE_NAME + " WHERE ClassID = ?";
+        String sql = "SELECT CASE WHEN Capacity IS NOT NULL AND COALESCE(CurrentStudents,0) >= Capacity THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END "
+                +
+                "FROM " + TABLE_NAME + " WHERE ClassID = ?";
         try {
             Boolean isFull = jdbcTemplate.queryForObject(sql, Boolean.class, classId.toString());
             return isFull != null && isFull;

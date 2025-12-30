@@ -10,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +59,9 @@ class ApplicationParticipantsServiceTest {
         testParticipant.setName("測試者");
         testParticipant.setStatus("待審核");
         testParticipant.setParticipantType(true);
+
+        // Ensure the service uses the mocked JdbcTemplate to avoid NPEs when jdbcTemplate methods are called
+        ReflectionTestUtils.setField(service, "jdbcTemplate", jdbcTemplate);
     }
 
     @Test

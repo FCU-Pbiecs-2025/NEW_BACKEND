@@ -363,4 +363,262 @@ class UsersControllerTest {
         mockMvc.perform(get("/users/SEARCH3"))
                 .andExpect(status().isOk());
     }
+
+    // ==================== 新增測試用例以提升覆蓋率 ====================
+
+    // ===== getUsersByOffsetJdbc 邊界測試 =====
+    @Test
+    void testGetUsersByOffsetJdbc_InvalidOffset() throws Exception {
+        mockMvc.perform(get("/users/offset")
+                .param("offset", "-1")
+                .param("size", "10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("Invalid offset/size")));
+    }
+
+    @Test
+    void testGetUsersByOffsetJdbc_InvalidSize() throws Exception {
+        mockMvc.perform(get("/users/offset")
+                .param("offset", "0")
+                .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("Invalid offset/size")));
+    }
+
+    @Test
+    void testGetUsersByOffsetJdbc_LargeSize() throws Exception {
+        // 測試 size 超過 MAX_SIZE 會被限制
+        when(usersService.getUsersWithOffsetAndInstitutionNameJdbc(eq(0), eq(100))).thenReturn(Arrays.asList());
+        when(usersService.getTotalCount()).thenReturn(0L);
+
+        mockMvc.perform(get("/users/offset")
+                .param("offset", "0")
+                .param("size", "200")) // 超過 MAX_SIZE=100
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testGetUsersByOffsetJdbc_Exception() throws Exception {
+        when(usersService.getUsersWithOffsetAndInstitutionNameJdbc(eq(0), eq(10)))
+                .thenThrow(new RuntimeException("Database error"));
+
+        mockMvc.perform(get("/users/offset")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error", is("Internal server error")));
+    }
+
+    // ===== searchUsersByAccount (search2) 測試 =====
+    @Test
+    void testSearchUsersByAccount_EmptyAccount() throws Exception {
+        mockMvc.perform(get("/users/search2")
+                .param("account", "")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("查詢帳號不能為空")));
+    }
+
+    @Test
+    void testSearchUsersByAccount_InvalidOffset() throws Exception {
+        mockMvc.perform(get("/users/search2")
+                .param("account", "test")
+                .param("offset", "-1")
+                .param("size", "10"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testSearchUsersByAccount_Exception() throws Exception {
+        when(usersService.searchUsersByAccountWithOffset(anyString(), anyInt(), anyInt()))
+                .thenThrow(new RuntimeException("Error"));
+
+        mockMvc.perform(get("/users/search2")
+                .param("account", "test")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    // ===== searchCitizenUsersByAccount (SEARCH3) 測試 =====
+    @Test
+    void testSearchCitizenUsersByAccount_InvalidOffset() throws Exception {
+        mockMvc.perform(get("/users/SEARCH3")
+                .param("account", "test")
+                .param("offset", "-1")
+                .param("size", "10"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testSearchCitizenUsersByAccount_Exception() throws Exception {
+        when(usersService.searchCitizenUsersByAccountWithOffset(anyString(), anyInt(), anyInt()))
+                .thenThrow(new RuntimeException("Error"));
+
+        mockMvc.perform(get("/users/SEARCH3")
+                .param("account", "test")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    // ===== searchUsers 測試 =====
+    @Test
+    void testSearchUsers_WithSearchTerm() throws Exception {
+        when(usersService.searchUsersWithOffset(eq("test"), eq(0), eq(10))).thenReturn(Arrays.asList());
+        when(usersService.getSearchCount(eq("test"))).thenReturn(0L);
+
+        mockMvc.perform(get("/users/search")
+                .param("searchTerm", "test")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.searchTerm", is("test")));
+    }
+
+    @Test
+    void testSearchUsers_EmptySearchTerm() throws Exception {
+        when(usersService.getUsersWithOffsetAndInstitutionNameJdbc(eq(0), eq(10))).thenReturn(Arrays.asList());
+        when(usersService.getTotalCount()).thenReturn(0L);
+
+        mockMvc.perform(get("/users/search")
+                .param("searchTerm", "")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testSearchUsers_NoSearchTerm() throws Exception {
+        when(usersService.getUsersWithOffsetAndInstitutionNameJdbc(eq(0), eq(10))).thenReturn(Arrays.asList());
+        when(usersService.getTotalCount()).thenReturn(0L);
+
+        mockMvc.perform(get("/users/search")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testSearchUsers_InvalidOffset() throws Exception {
+        mockMvc.perform(get("/users/search")
+                .param("offset", "-1")
+                .param("size", "10"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testSearchUsers_Exception() throws Exception {
+        when(usersService.getUsersWithOffsetAndInstitutionNameJdbc(anyInt(), anyInt()))
+                .thenThrow(new RuntimeException("Error"));
+
+        mockMvc.perform(get("/users/search")
+                .param("offset", "0")
+                .param("size", "10"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    // ===== checkAccountExists 測試 =====
+    @Test
+    void testCheckAccountExists_True() throws Exception {
+        when(usersService.isAccountExists("existingAccount")).thenReturn(true);
+
+        mockMvc.perform(get("/users/check-account/{account}", "existingAccount"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("true"));
+    }
+
+    @Test
+    void testCheckAccountExists_False() throws Exception {
+        when(usersService.isAccountExists("newAccount")).thenReturn(false);
+
+        mockMvc.perform(get("/users/check-account/{account}", "newAccount"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("false"));
+    }
+
+    @Test
+    void testCheckAccountExists_EmptyAccount() throws Exception {
+        mockMvc.perform(get("/users/check-account/{account}", " "))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("false"));
+    }
+
+    @Test
+    void testCheckAccountExists_Exception() throws Exception {
+        when(usersService.isAccountExists("test")).thenThrow(new RuntimeException("Error"));
+
+        mockMvc.perform(get("/users/check-account/{account}", "test"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string("false"));
+    }
+
+    // ===== checkEmailExists 測試 =====
+    @Test
+    void testCheckEmailExists_True() throws Exception {
+        when(usersService.isEmailExists("existing@email.com")).thenReturn(true);
+
+        mockMvc.perform(get("/users/check-email/{email}", "existing@email.com"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("true"));
+    }
+
+    @Test
+    void testCheckEmailExists_False() throws Exception {
+        when(usersService.isEmailExists("new@email.com")).thenReturn(false);
+
+        mockMvc.perform(get("/users/check-email/{email}", "new@email.com"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("false"));
+    }
+
+    @Test
+    void testCheckEmailExists_EmptyEmail() throws Exception {
+        mockMvc.perform(get("/users/check-email/{email}", " "))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("false"));
+    }
+
+    @Test
+    void testCheckEmailExists_Exception() throws Exception {
+        when(usersService.isEmailExists("test@email.com")).thenThrow(new RuntimeException("Error"));
+
+        mockMvc.perform(get("/users/check-email/{email}", "test@email.com"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string("false"));
+    }
+
+    // ===== getUserFamilyInfo 測試 =====
+    @Test
+    void testGetUserFamilyInfo_Success() throws Exception {
+        testUser.setFamilyInfoID(UUID.randomUUID());
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.of(testUser));
+        when(parentInfoService.getByFamilyInfoID(any())).thenReturn(Arrays.asList());
+        when(childInfoService.getByFamilyInfoID(any())).thenReturn(Arrays.asList());
+
+        mockMvc.perform(get("/users/users-familyInfo/{userID}", testUserId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userID").exists());
+    }
+
+    @Test
+    void testGetUserFamilyInfo_NotFound() throws Exception {
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/users/users-familyInfo/{userID}", testUserId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testGetUserFamilyInfo_NoFamilyInfo() throws Exception {
+        testUser.setFamilyInfoID(null);
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.of(testUser));
+
+        mockMvc.perform(get("/users/users-familyInfo/{userID}", testUserId))
+                .andExpect(status().isOk());
+
+        verify(parentInfoService, never()).getByFamilyInfoID(any());
+        verify(childInfoService, never()).getByFamilyInfoID(any());
+    }
 }
