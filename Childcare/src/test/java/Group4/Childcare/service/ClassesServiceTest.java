@@ -205,7 +205,7 @@ class ClassesServiceTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15,
+
                 null
         );
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
@@ -251,7 +251,7 @@ class ClassesServiceTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15,
+
                 null
         );
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);
@@ -280,7 +280,6 @@ class ClassesServiceTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15,
                 null
         );
         List<ClassSummaryDTO> summaryList = Arrays.asList(summaryDTO);

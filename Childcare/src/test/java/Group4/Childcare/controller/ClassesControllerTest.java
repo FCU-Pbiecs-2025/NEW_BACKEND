@@ -152,7 +152,6 @@ class ClassesControllerTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15,
                 null
         );
         List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
@@ -187,7 +186,6 @@ class ClassesControllerTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15,
                 null
         );
         List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
@@ -221,7 +219,6 @@ class ClassesControllerTest {
                 "3歲",
                 "測試托育機構",
                 testInstitutionId,
-                15,
                 null
         );
         List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
@@ -266,4 +263,3 @@ class ClassesControllerTest {
         verify(service, times(1)).delete(testClassId);
     }
 }
-
