@@ -95,13 +95,27 @@ public class FileService {
 
   /**
    * 取得案件附件儲存的根目錄路徑
-   * 選項A：所有案件共用同一個資料夾（例如 IdentityResource）
-   * 不再依照 ApplicationID 建立子資料夾，避免自動建立資料夾的需求
-   * @param applicationId 目前不再作為子資料夾使用，保留參數以維持呼叫端介面
-   * @return 根目錄路徑（例如 IdentityResource）
+   * 依照 ApplicationID 建立子資料夾（例如 IdentityResource/{applicationId}）
+   * 自動建立資料夾如果不存在
+   *
+   * 檔案儲存結構：
+   *   - 實體路徑：IdentityResource/{applicationId}/UUID_原始檔名
+   *   - 資料庫儲存：{applicationId}/UUID_原始檔名
+   *   - 前端訪問：/identity-files/{applicationId}/UUID_原始檔名
+   *
+   * @param applicationId 申請單 ID，用於建立子資料夾
+   * @return 資料夾路徑（例如 IdentityResource/{applicationId}）
    */
   public Path getFolderPath(UUID applicationId) {
-    return Paths.get(uploadDir); // 不再附加 applicationId 子資料夾
+    Path folderPath = Paths.get(uploadDir, applicationId.toString());
+    try {
+      if (!Files.exists(folderPath)) {
+        Files.createDirectories(folderPath);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to create directory for application: " + applicationId, e);
+    }
+    return folderPath;
   }
 
   /**

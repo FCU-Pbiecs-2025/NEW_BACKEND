@@ -51,21 +51,204 @@ public class ApplicationsController {
     }
 
 
+    /**
+     * 更新申請案件（支持文件上傳）
+     *
+     * 功能說明：
+     * 1. 支持 multipart/form-data 格式（可上傳文件）
+     * 2. 支持上傳最多 4 個附件檔案（會覆蓋對應位置的舊檔案）
+     * 3. 檔案儲存到 IdentityResource/{applicationID}/ 目錄
+     * 4. 如果不上傳新文件，則保留原有附件路徑
+     * 5. 參考 submitApplicationCase 的實現方式
+     *
+     * 請求參數：
+     *  - file (可選): 第一個附件檔案（覆蓋 attachmentPath）
+     *  - file1 (可選): 第二個附件檔案（覆蓋 attachmentPath1）
+     *  - file2 (可選): 第三個附件檔案（覆蓋 attachmentPath2）
+     *  - file3 (可選): 第四個附件檔案（覆蓋 attachmentPath3）
+     *
+     * @param id 申請案件 ID
+     * @param file 附件檔案 1
+     * @param file1 附件檔案 2
+     * @param file2 附件檔案 3
+     * @param file3 附件檔案 4
+     * @return 更新後的案件資訊
+     */
     @PutMapping("/{id}")
-    public ResponseEntity<Applications> update(@PathVariable UUID id, @RequestBody Applications entity) {
-        Applications original = service.getById(id).orElseThrow();
-        // 只更新有傳的欄位（部分更新）
-        if (entity.getApplicationDate() != null) original.setApplicationDate(entity.getApplicationDate());
-        if (entity.getCaseNumber() != null) original.setCaseNumber(entity.getCaseNumber());
-        if (entity.getInstitutionID() != null) original.setInstitutionID(entity.getInstitutionID());
-        if (entity.getUserID() != null) original.setUserID(entity.getUserID());
-        if (entity.getIdentityType() != null) original.setIdentityType(entity.getIdentityType());
-        if (entity.getAttachmentPath() != null) original.setAttachmentPath(entity.getAttachmentPath());
-        if (entity.getAttachmentPath1() != null) original.setAttachmentPath1(entity.getAttachmentPath1());
-        if (entity.getAttachmentPath2() != null) original.setAttachmentPath2(entity.getAttachmentPath2());
-        if (entity.getAttachmentPath3() != null) original.setAttachmentPath3(entity.getAttachmentPath3());
-        // 其他欄位如有需要可依此類推
-        return ResponseEntity.ok(service.update(id, original));
+    public ResponseEntity<?> update(
+            @PathVariable UUID id,
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            @RequestPart(value = "file1", required = false) MultipartFile file1,
+            @RequestPart(value = "file2", required = false) MultipartFile file2,
+            @RequestPart(value = "file3", required = false) MultipartFile file3) {
+
+        try {
+            // 檢查案件是否存在
+            Applications existingApplication = service.getById(id).orElseThrow(() ->
+                    new RuntimeException("Application not found: " + id));
+
+            System.out.println("=== update Application START ===");
+            System.out.println("Application ID: " + id);
+            System.out.println("📁 文件存儲位置: IdentityResource/" + id + "/ (與 submitApplicationCase 一致)");
+            System.out.println("現有附件路徑:");
+            System.out.println("  attachmentPath: " + existingApplication.getAttachmentPath());
+            System.out.println("  attachmentPath1: " + existingApplication.getAttachmentPath1());
+            System.out.println("  attachmentPath2: " + existingApplication.getAttachmentPath2());
+            System.out.println("  attachmentPath3: " + existingApplication.getAttachmentPath3());
+
+            // 檢查接收到的檔案
+            System.out.println("🔍 [update] 檢查接收到的檔案:");
+            System.out.println("  file: " + (file != null ? file.getOriginalFilename() + " (" + file.getSize() + " bytes)" : "null"));
+            System.out.println("  file1: " + (file1 != null ? file1.getOriginalFilename() + " (" + file1.getSize() + " bytes)" : "null"));
+            System.out.println("  file2: " + (file2 != null ? file2.getOriginalFilename() + " (" + file2.getSize() + " bytes)" : "null"));
+            System.out.println("  file3: " + (file3 != null ? file3.getOriginalFilename() + " (" + file3.getSize() + " bytes)" : "null"));
+
+            // 使用 Map 來按照參數名稱處理文件，確保順序正確
+            Map<String, MultipartFile> fileMap = new java.util.LinkedHashMap<>();
+            if (file != null && !file.isEmpty()) fileMap.put("file", file);
+            if (file1 != null && !file1.isEmpty()) fileMap.put("file1", file1);
+            if (file2 != null && !file2.isEmpty()) fileMap.put("file2", file2);
+            if (file3 != null && !file3.isEmpty()) fileMap.put("file3", file3);
+
+            System.out.println("📦 總共收到 " + fileMap.size() + " 個有效檔案");
+
+            // 如果有上傳新檔案，則處理文件上傳
+            if (!fileMap.isEmpty()) {
+                int fileIndex = 0;
+                for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
+                    String paramName = entry.getKey();
+                    MultipartFile uploadedFile = entry.getValue();
+
+                    System.out.println("🔵 [update] 處理檔案參數: " + paramName + " (索引: " + fileIndex + ")");
+                    System.out.println("  原始檔名: " + uploadedFile.getOriginalFilename());
+                    System.out.println("  檔案大小: " + uploadedFile.getSize() + " bytes");
+                    System.out.println("  內容類型: " + uploadedFile.getContentType());
+
+                    try {
+                        // 獲取原始檔名
+                        String originalFileName = uploadedFile.getOriginalFilename();
+                        if (originalFileName == null || originalFileName.trim().isEmpty()) {
+                            originalFileName = "attachment_" + fileIndex;
+                        }
+
+                        // 為每個文件生成唯一的 UUID 前綴
+                        UUID fileUuid = UUID.randomUUID();
+                        String fileName = fileUuid + "_" + originalFileName;
+
+                        // 獲取目標資料夾路徑並生成完整文件路徑
+                        // 📁 重要：使用 IdentityResource/{applicationId}/ 目錄（與 submitApplicationCase 一致）
+                        Path folderPath = fileService.getFolderPath(id);
+                        Path filePath = folderPath.resolve(fileName);
+
+                        System.out.println("  生成的唯一 UUID: " + fileUuid);
+                        System.out.println("  生成檔名: " + fileName);
+                        System.out.println("  📁 存儲目錄: IdentityResource/" + id + "/");
+                        System.out.println("  📄 完整路徑: " + filePath.toAbsolutePath());
+                        System.out.println("  ✅ 與 submitApplicationCase 使用相同的存儲位置");
+
+                        // 刪除舊文件（如果存在）
+                        String oldPath = null;
+                        switch (fileIndex) {
+                            case 0:
+                                oldPath = existingApplication.getAttachmentPath();
+                                break;
+                            case 1:
+                                oldPath = existingApplication.getAttachmentPath1();
+                                break;
+                            case 2:
+                                oldPath = existingApplication.getAttachmentPath2();
+                                break;
+                            case 3:
+                                oldPath = existingApplication.getAttachmentPath3();
+                                break;
+                        }
+
+                        if (oldPath != null && !oldPath.isEmpty()) {
+                            try {
+                                // 從路徑中提取檔名（格式：applicationId/uuid_檔名）
+                                String oldFileName = oldPath.substring(oldPath.lastIndexOf('/') + 1);
+                                Path oldFilePath = fileService.getFolderPath(id).resolve(oldFileName);
+                                if (Files.exists(oldFilePath)) {
+                                    Files.delete(oldFilePath);
+                                    System.out.println("  🗑️ 已刪除舊文件: " + oldFilePath.getFileName());
+                                }
+                            } catch (Exception e) {
+                                System.err.println("  ⚠️ 刪除舊文件失敗: " + e.getMessage());
+                            }
+                        }
+
+                        // 使用 StandardCopyOption.REPLACE_EXISTING 確保文件被正確寫入
+                        Files.copy(uploadedFile.getInputStream(), filePath,
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+                        System.out.println("  ✅ 檔案已成功儲存");
+
+                        // 設置對應的 attachmentPath
+                        // 儲存格式：{applicationId}/UUID_原始檔名
+                        String pathWithFolder = id + "/" + fileName;
+
+                        switch (fileIndex) {
+                            case 0:
+                                existingApplication.setAttachmentPath(pathWithFolder);
+                                System.out.println("  ✅ 更新 attachmentPath: " + pathWithFolder);
+                                break;
+                            case 1:
+                                existingApplication.setAttachmentPath1(pathWithFolder);
+                                System.out.println("  ✅ 更新 attachmentPath1: " + pathWithFolder);
+                                break;
+                            case 2:
+                                existingApplication.setAttachmentPath2(pathWithFolder);
+                                System.out.println("  ✅ 更新 attachmentPath2: " + pathWithFolder);
+                                break;
+                            case 3:
+                                existingApplication.setAttachmentPath3(pathWithFolder);
+                                System.out.println("  ✅ 更新 attachmentPath3: " + pathWithFolder);
+                                break;
+                            default:
+                                System.out.println("  ⚠️ 警告：超過 4 個附件的限制，忽略此檔案");
+                                break;
+                        }
+
+                        fileIndex++;
+                    } catch (Exception ex) {
+                        System.err.println("❌ Failed to save file from parameter '" + paramName + "': " + ex.getMessage());
+                        ex.printStackTrace();
+                        return ResponseEntity.status(500).body("Failed to save file '" + paramName + "': " + ex.getMessage());
+                    }
+                }
+
+                // 更新資料庫
+                try {
+                    System.out.println("🔵 Updating Application with new attachment paths:");
+                    System.out.println("  AttachmentPath: " + existingApplication.getAttachmentPath());
+                    System.out.println("  AttachmentPath1: " + existingApplication.getAttachmentPath1());
+                    System.out.println("  AttachmentPath2: " + existingApplication.getAttachmentPath2());
+                    System.out.println("  AttachmentPath3: " + existingApplication.getAttachmentPath3());
+
+                    service.update(id, existingApplication);
+                    System.out.println("✅ SUCCESS: Application updated with new attachment paths!");
+                } catch (Exception ex) {
+                    System.err.println("❌ FAILED to update Application: " + ex.getMessage());
+                    ex.printStackTrace();
+                    return ResponseEntity.status(500).body("Failed to update application: " + ex.getMessage());
+                }
+            } else {
+                System.out.println("ℹ️ 沒有上傳新檔案，保留原有附件路徑");
+            }
+
+            // 最終輸出
+            System.out.println("📤 [update] 更新後的附件路徑:");
+            System.out.println("  attachmentPath: " + existingApplication.getAttachmentPath());
+            System.out.println("  attachmentPath1: " + existingApplication.getAttachmentPath1());
+            System.out.println("  attachmentPath2: " + existingApplication.getAttachmentPath2());
+            System.out.println("  attachmentPath3: " + existingApplication.getAttachmentPath3());
+            System.out.println("=== update Application END ===");
+
+            return ResponseEntity.ok(existingApplication);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ResponseEntity.status(500).body("Error updating application: " + ex.getMessage());
+        }
     }
 
     @GetMapping("/application-status/{userID}")
@@ -473,49 +656,92 @@ public class ApplicationsController {
             // 設置 Application ID 到 caseDto
             caseDto.setApplicationID(applicationId);
 
-            // 儲存檔案（不再由 FileService 額外建立資料夾，若需要會在 getFolderPath/createDirectories 自動建立）
-            List<MultipartFile> files = new ArrayList<>();
-            if (file != null && !file.isEmpty()) files.add(file);
-            if (file1 != null && !file1.isEmpty()) files.add(file1);
-            if (file2 != null && !file2.isEmpty()) files.add(file2);
-            if (file3 != null && !file3.isEmpty()) files.add(file3);
+            // 儲存檔案到 IdentityResource/{applicationId}/ 目錄
+            System.out.println("🔍 [submitApplicationCase] 檢查接收到的檔案:");
+            System.out.println("  file: " + (file != null ? file.getOriginalFilename() + " (" + file.getSize() + " bytes)" : "null"));
+            System.out.println("  file1: " + (file1 != null ? file1.getOriginalFilename() + " (" + file1.getSize() + " bytes)" : "null"));
+            System.out.println("  file2: " + (file2 != null ? file2.getOriginalFilename() + " (" + file2.getSize() + " bytes)" : "null"));
+            System.out.println("  file3: " + (file3 != null ? file3.getOriginalFilename() + " (" + file3.getSize() + " bytes)" : "null"));
 
-            for (int i = 0; i < files.size(); i++) {
-                MultipartFile uploadedFile = files.get(i);
+            // 使用 Map 來按照參數名稱處理文件，確保順序正確
+            Map<String, MultipartFile> fileMap = new java.util.LinkedHashMap<>();
+            if (file != null && !file.isEmpty()) fileMap.put("file", file);
+            if (file1 != null && !file1.isEmpty()) fileMap.put("file1", file1);
+            if (file2 != null && !file2.isEmpty()) fileMap.put("file2", file2);
+            if (file3 != null && !file3.isEmpty()) fileMap.put("file3", file3);
+
+            System.out.println("📦 總共收到 " + fileMap.size() + " 個有效檔案");
+
+            int fileIndex = 0;
+            for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
+                String paramName = entry.getKey();
+                MultipartFile uploadedFile = entry.getValue();
+
+                System.out.println("🔵 [submitApplicationCase] 處理檔案參數: " + paramName + " (索引: " + fileIndex + ")");
+                System.out.println("  原始檔名: " + uploadedFile.getOriginalFilename());
+                System.out.println("  檔案大小: " + uploadedFile.getSize() + " bytes");
+                System.out.println("  內容類型: " + uploadedFile.getContentType());
+
                 try {
+                    // 獲取原始檔名
                     String originalFileName = uploadedFile.getOriginalFilename();
                     if (originalFileName == null || originalFileName.trim().isEmpty()) {
-                        originalFileName = "attachment";
+                        originalFileName = "attachment_" + fileIndex;
                     }
-                    String fileName = UUID.randomUUID() + "_" + originalFileName;
-                    Path filePath = fileService.getFolderPath(applicationId).resolve(fileName);
 
-                    // 直接寫檔，不再自動建立父目錄；若目錄不存在將拋出錯誤，方便你自行管理資料夾結構
-                    Files.copy(uploadedFile.getInputStream(), filePath);
+                    // 為每個文件生成唯一的 UUID 前綴
+                    UUID fileUuid = UUID.randomUUID();
+                    String fileName = fileUuid + "_" + originalFileName;
 
-                    // 設置對應的 attachmentPath 到 DTO 與 Entity，之後會一起寫入 DB
-                    switch (i) {
+                    // 獲取目標資料夾路徑並生成完整文件路徑
+                    Path folderPath = fileService.getFolderPath(applicationId);
+                    Path filePath = folderPath.resolve(fileName);
+
+                    System.out.println("  生成的唯一 UUID: " + fileUuid);
+                    System.out.println("  生成檔名: " + fileName);
+                    System.out.println("  儲存路徑: " + filePath.toAbsolutePath().toString());
+
+                    // 使用 StandardCopyOption.REPLACE_EXISTING 確保文件被正確寫入
+                    Files.copy(uploadedFile.getInputStream(), filePath,
+                               java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+                    System.out.println("  ✅ 檔案已成功儲存");
+
+                    // 設置對應的 attachmentPath 到 DTO 與 Entity
+                    // 儲存格式：{applicationId}/UUID_原始檔名
+                    String pathWithFolder = applicationId + "/" + fileName;
+
+                    switch (fileIndex) {
                         case 0:
-                            caseDto.setAttachmentPath(fileName);
-                            newApplication.setAttachmentPath(fileName);
+                            caseDto.setAttachmentPath(pathWithFolder);
+                            newApplication.setAttachmentPath(pathWithFolder);
+                            System.out.println("  ✅ 設定 attachmentPath: " + pathWithFolder);
                             break;
                         case 1:
-                            caseDto.setAttachmentPath1(fileName);
-                            newApplication.setAttachmentPath1(fileName);
+                            caseDto.setAttachmentPath1(pathWithFolder);
+                            newApplication.setAttachmentPath1(pathWithFolder);
+                            System.out.println("  ✅ 設定 attachmentPath1: " + pathWithFolder);
                             break;
                         case 2:
-                            caseDto.setAttachmentPath2(fileName);
-                            newApplication.setAttachmentPath2(fileName);
+                            caseDto.setAttachmentPath2(pathWithFolder);
+                            newApplication.setAttachmentPath2(pathWithFolder);
+                            System.out.println("  ✅ 設定 attachmentPath2: " + pathWithFolder);
                             break;
                         case 3:
-                            caseDto.setAttachmentPath3(fileName);
-                            newApplication.setAttachmentPath3(fileName);
+                            caseDto.setAttachmentPath3(pathWithFolder);
+                            newApplication.setAttachmentPath3(pathWithFolder);
+                            System.out.println("  ✅ 設定 attachmentPath3: " + pathWithFolder);
+                            break;
+                        default:
+                            System.out.println("  ⚠️ 警告：超過 4 個附件的限制，忽略此檔案");
                             break;
                     }
+
+                    fileIndex++;
                 } catch (Exception ex) {
-                    System.err.println("Failed to save file " + i + ": " + ex.getMessage());
+                    System.err.println("❌ Failed to save file from parameter '" + paramName + "': " + ex.getMessage());
                     ex.printStackTrace();
-                    return ResponseEntity.status(500).body("Failed to save file " + i + ": " + ex.getMessage());
+                    return ResponseEntity.status(500).body("Failed to save file '" + paramName + "': " + ex.getMessage());
                 }
             }
 
@@ -694,6 +920,15 @@ public class ApplicationsController {
             System.out.println("✅ All participants saved successfully!");
             // === 建立 participants 完成 ===
 
+            // 最終檢查：輸出返回給前端的附件路徑
+            System.out.println("📤 [submitApplicationCase] 返回給前端的附件路徑:");
+            System.out.println("  attachmentPath: " + caseDto.getAttachmentPath());
+            System.out.println("  attachmentPath1: " + caseDto.getAttachmentPath1());
+            System.out.println("  attachmentPath2: " + caseDto.getAttachmentPath2());
+            System.out.println("  attachmentPath3: " + caseDto.getAttachmentPath3());
+            System.out.println("  前端應使用 URL: /identity-files/{上述路徑}");
+            System.out.println("  例如: /identity-files/" + caseDto.getAttachmentPath());
+
             return ResponseEntity.ok(caseDto);
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -750,18 +985,19 @@ public class ApplicationsController {
      * <p>附件檔案實際 URL 組合方式（搭配 WebConfig）：</p>
      * <ul>
      *   <li>WebConfig 將實體資料夾 <code>IdentityResource</code> 映射為 <code>/identity-files/**</code></li>
-     *   <li>若檔案實際存放於：<code>{projectRoot}/IdentityResource/{檔名}</code></li>
+     *   <li>檔案實際存放於：<code>{projectRoot}/IdentityResource/{applicationId}/{UUID_檔名}</code></li>
+     *   <li>資料庫儲存格式：<code>{applicationId}/{UUID_檔名}</code></li>
      *   <li>前端可用下列方式組 URL：</li>
      * </ul>
      * <pre>
      *   // 範例：DTO 回傳
      *   {
      *     "applicationId": "4286bfa6-fcfd-40d4-afb2-2c16e4dd5eec",
-     *     "attachmentPath": "a_file_1.jpg"
+     *     "attachmentPath": "4286bfa6-fcfd-40d4-afb2-2c16e4dd5eec/067b4d93-6eda-4209-9066-80560ef68d98_檔名.jpg"
      *   }
      *
      *   // 對應可存取 URL
-     *   http://localhost:8080/identity-files/a_file_1.jpg
+     *   http://localhost:8080/identity-files/4286bfa6-fcfd-40d4-afb2-2c16e4dd5eec/067b4d93-6eda-4209-9066-80560ef68d98_檔名.jpg
      * </pre>
      *
      * <p>使用範例：</p>
