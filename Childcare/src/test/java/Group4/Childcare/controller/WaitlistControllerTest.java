@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -151,11 +152,19 @@ class WaitlistControllerTest {
                                 any(), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
+        /**
+         * BB-WL-RBVA-01：強固邊界值分析
+         * Given: totalCapacity == currentStudents（availableSlots = 0）
+         * When: 呼叫 POST /waitlist/lottery
+         * Then: HTTP 200；success=true；message 包含「無空缺名額，已打亂候補順序」；waitlisted ==
+         * waitlistList.size()
+         */
         @Test
         void testConductLottery_NoAvailableSlots() throws Exception {
                 LotteryRequest request = new LotteryRequest();
                 request.setInstitutionId(testInstitutionId);
 
+                // 設定 totalCapacity == currentStudents，使 availableSlots = 0
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(100);
 
@@ -165,10 +174,25 @@ class WaitlistControllerTest {
                 acceptedCount.put(3, 70);
                 when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
+                // 添加候補申請人以驗證 waitlisted 與 waitlistList.size() 一致性
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
-                applicantsByPriority.put(1, new ArrayList<>());
+                List<Map<String, Object>> priority1Applicants = new ArrayList<>();
+                Map<String, Object> applicant1 = new HashMap<>();
+                applicant1.put("ApplicantName", "候補一");
+                applicant1.put("Email", "waitlist1@example.com");
+                applicant1.put("BirthDate", java.sql.Date.valueOf("2020-05-15"));
+                priority1Applicants.add(applicant1);
+
+                List<Map<String, Object>> priority3Applicants = new ArrayList<>();
+                Map<String, Object> applicant2 = new HashMap<>();
+                applicant2.put("ApplicantName", "候補二");
+                applicant2.put("Email", "waitlist2@example.com");
+                applicant2.put("BirthDate", java.sql.Date.valueOf("2021-03-20"));
+                priority3Applicants.add(applicant2);
+
+                applicantsByPriority.put(1, priority1Applicants);
                 applicantsByPriority.put(2, new ArrayList<>());
-                applicantsByPriority.put(3, new ArrayList<>());
+                applicantsByPriority.put(3, priority3Applicants);
                 when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId))
                                 .thenReturn(applicantsByPriority);
 
@@ -177,8 +201,19 @@ class WaitlistControllerTest {
                 mockMvc.perform(post("/waitlist/lottery")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
+                                .andDo(print()) // 印出完整的 request/response
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.success", is(true)));
+                                .andExpect(jsonPath("$.success", is(true)))
+                                // 驗證 message 包含「無空缺名額，已打亂候補順序」
+                                .andExpect(jsonPath("$.message", containsString("無空缺名額，已打亂候補順序")))
+                                // 驗證 waitlisted 數量正確（2位申請人）
+                                .andExpect(jsonPath("$.waitlisted", is(2)))
+                                // 驗證 waitlistList.size() == waitlisted（不變量驗證）
+                                .andExpect(jsonPath("$.waitlistList", hasSize(2)))
+                                // 驗證無人被錄取（因為沒有空缺名額）
+                                .andExpect(jsonPath("$.firstPriorityAccepted", is(0)))
+                                .andExpect(jsonPath("$.secondPriorityAccepted", is(0)))
+                                .andExpect(jsonPath("$.thirdPriorityAccepted", is(0)));
         }
 
         // ===== manualAdmit 測試 =====

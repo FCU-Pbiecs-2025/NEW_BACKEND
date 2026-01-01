@@ -5,6 +5,9 @@ import Group4.Childcare.DTO.ApplicationSummaryDTO;
 import Group4.Childcare.DTO.ApplicationSummaryWithDetailsDTO;
 import Group4.Childcare.DTO.ApplicationCaseDTO;
 import Group4.Childcare.DTO.CaseEditUpdateDTO;
+import Group4.Childcare.DTO.UserSimpleDTO;
+import Group4.Childcare.DTO.ApplicationParticipantDTO;
+import Group4.Childcare.DTO.AdminCaseSearchRequestDto;
 import Group4.Childcare.Service.ApplicationsService;
 import Group4.Childcare.Service.FileService;
 import Group4.Childcare.Service.ApplicationParticipantsService;
@@ -13,20 +16,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.mock.web.MockMultipartFile;
-import Group4.Childcare.DTO.AdminCaseSearchRequestDto;
-import Group4.Childcare.DTO.UserSimpleDTO;
-import Group4.Childcare.DTO.ApplicationParticipantDTO;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -89,6 +92,13 @@ class ApplicationsControllerTest {
                 testApplication.setApplicationDate(LocalDate.now());
                 testApplication.setCaseNumber(1234567890L);
                 testApplication.setIdentityType((byte) 1);
+
+                // Manually inject mocks that @InjectMocks might miss due to mixed
+                // constructor/field injection
+                ReflectionTestUtils.setField(controller, "fileService", fileService);
+                ReflectionTestUtils.setField(controller, "jdbcTemplate", jdbcTemplate);
+                ReflectionTestUtils.setField(controller, "applicationParticipantsService",
+                                applicationParticipantsService);
         }
 
         // ===== create 測試 =====
@@ -111,16 +121,29 @@ class ApplicationsControllerTest {
                 when(service.getById(testApplicationId)).thenReturn(Optional.of(testApplication));
                 when(service.update(eq(testApplicationId), any(Applications.class))).thenReturn(testApplication);
 
-                Applications updateRequest = new Applications();
-                updateRequest.setCaseNumber(9999999999L);
+                // update 走檔案儲存流程時會用到 folderPath + Files.copy，測試要給一個存在的 tempDir。
+                Path tempDir = Files.createTempDirectory("childcare-test-update-");
+                when(fileService.getFolderPath(eq(testApplicationId))).thenReturn(tempDir);
 
-                mockMvc.perform(put("/applications/{id}", testApplicationId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(updateRequest)))
-                                .andExpect(status().isOk());
+                 // Controller 的 update({id}) 是 multipart/form-data
+                 // 為了觸發 service.update，我們必須提供至少一個檔案，因為 Controller 邏輯是：
+                 // if (!fileMap.isEmpty()) { ... service.update(...) } else { ... }
+                 MockMultipartFile file = new MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE,
+                                 "content".getBytes());
 
-                verify(service, times(1)).getById(testApplicationId);
-                verify(service, times(1)).update(eq(testApplicationId), any(Applications.class));
+                MockMultipartHttpServletRequestBuilder req = multipart("/applications/{id}", testApplicationId)
+                                .file(file);
+                req.with(r -> {
+                        r.setMethod("PUT");
+                        return r;
+                });
+
+                mockMvc.perform(req
+                                 .contentType(MediaType.MULTIPART_FORM_DATA))
+                                 .andExpect(status().isOk());
+
+                 verify(service, times(1)).getById(testApplicationId);
+                 verify(service, times(1)).update(eq(testApplicationId), any(Applications.class));
         }
 
         // 注意：testUpdate_NotFound 已移除，因為 Controller 拋出 NoSuchElementException
@@ -535,7 +558,6 @@ class ApplicationsControllerTest {
 
         // ===== submitApplicationCase 測試 =====
         @Test
-        @Disabled("Fix mocking issues causing 500 error")
         void testSubmitApplicationCase_Success() throws Exception {
                 UUID newApplicationId = UUID.randomUUID();
                 Applications createdApp = new Applications();
@@ -576,8 +598,10 @@ class ApplicationsControllerTest {
                 when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
                 when(applicationParticipantsService.create(any(Group4.Childcare.Model.ApplicationParticipants.class)))
                                 .thenReturn(null);
-                when(fileService.getFolderPath(any(java.util.UUID.class)))
-                                .thenReturn(java.nio.file.Paths.get("temp/path/"));
+
+                // submitApplicationCase 會直接 Files.copy()，因此 folderPath 必須存在。
+                Path tempDir = Files.createTempDirectory("childcare-test-identity-");
+                when(fileService.getFolderPath(any(UUID.class))).thenAnswer(inv -> tempDir);
 
                 MockMultipartFile file = new MockMultipartFile("file", "test.pdf", MediaType.APPLICATION_PDF_VALUE,
                                 "content".getBytes());
@@ -589,6 +613,8 @@ class ApplicationsControllerTest {
                                 .file(caseDtoPart)
                                 .contentType(MediaType.MULTIPART_FORM_DATA))
                                 .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any(Applications.class));
         }
 
         @Test
@@ -640,7 +666,6 @@ class ApplicationsControllerTest {
 
         // ===== adminSearchCases 測試 =====
         @Test
-        @Disabled("Fix mocking issues causing 500 error")
         void testAdminSearchCases_Success() throws Exception {
                 AdminCaseSearchRequestDto searchDto = new AdminCaseSearchRequestDto();
                 searchDto.setInstitutionId(testInstitutionId);
@@ -651,7 +676,8 @@ class ApplicationsControllerTest {
                 row.put("ApplicationID", testApplicationId.toString());
                 mockResult.add(row);
 
-                doReturn(mockResult).when(jdbcTemplate).queryForList(anyString(), (Object[]) any());
+                // Controller 呼叫 queryForList(sql, params.toArray())，第二參數是 Object[]。
+                doReturn(mockResult).when(jdbcTemplate).queryForList(anyString(), any(Object[].class));
 
                 mockMvc.perform(get("/applications/admin/search")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -664,8 +690,8 @@ class ApplicationsControllerTest {
         void testAdminSearchCases_DatabaseError() throws Exception {
                 AdminCaseSearchRequestDto searchDto = new AdminCaseSearchRequestDto();
 
-                doThrow(new RuntimeException("DB Error")).when(jdbcTemplate).queryForList(anyString(),
-                                (Object[]) any());
+                doThrow(new RuntimeException("DB Error")).when(jdbcTemplate)
+                                .queryForList(anyString(), any(Object[].class));
 
                 mockMvc.perform(get("/applications/admin/search")
                                 .contentType(MediaType.APPLICATION_JSON)
