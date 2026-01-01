@@ -259,4 +259,255 @@ class ClassesControllerTest {
 
                 verify(service, times(1)).delete(testClassId);
         }
+
+        // ===== getByInstitutionId 測試 =====
+        @Test
+        void testGetByInstitutionId_Success() throws Exception {
+                // Given
+                Classes anotherClass = new Classes();
+                anotherClass.setClassID(UUID.randomUUID());
+                anotherClass.setInstitutionID(testInstitutionId);
+                anotherClass.setClassName("小班");
+
+                List<Classes> classes = Arrays.asList(testClass, anotherClass);
+                when(service.getByInstitutionId(testInstitutionId)).thenReturn(classes);
+
+                // When & Then
+                mockMvc.perform(get("/classes/institution/{institutionId}", testInstitutionId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(2)))
+                                .andExpect(jsonPath("$[0].className", is("幼幼班")))
+                                .andExpect(jsonPath("$[1].className", is("小班")));
+
+                verify(service, times(1)).getByInstitutionId(testInstitutionId);
+        }
+
+        // ===== searchByInstitutionName 測試 =====
+        @Test
+        void testSearchByInstitutionName_Success() throws Exception {
+                // Given
+                ClassSummaryDTO summaryDTO = new ClassSummaryDTO(
+                                testClassId,
+                                "幼幼班",
+                                Integer.valueOf(20),
+                                "2歲",
+                                "3歲",
+                                "測試托育機構",
+                                testInstitutionId,
+                                "適合2-3歲幼兒");
+                List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
+                when(service.searchClassesByInstitutionName("測試")).thenReturn(classes);
+
+                // When & Then
+                mockMvc.perform(get("/classes/search/institution")
+                                .param("name", "測試")
+                                .param("offset", "0")
+                                .param("size", "10")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(1)))
+                                .andExpect(jsonPath("$.offset", is(0)))
+                                .andExpect(jsonPath("$.totalElements", is(1)));
+
+                verify(service, times(1)).searchClassesByInstitutionName("測試");
+        }
+
+        @Test
+        void testSearchByInstitutionName_EmptyName_BadRequest() throws Exception {
+                // When & Then
+                mockMvc.perform(get("/classes/search/institution")
+                                .param("name", "")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest());
+
+                verify(service, never()).searchClassesByInstitutionName(any());
+        }
+
+        @Test
+        void testSearchByInstitutionName_WithInstitutionIdFilter() throws Exception {
+                // Given
+                ClassSummaryDTO summaryDTO = new ClassSummaryDTO(
+                                testClassId,
+                                "幼幼班",
+                                Integer.valueOf(20),
+                                "2歲",
+                                "3歲",
+                                "測試托育機構",
+                                testInstitutionId,
+                                "適合2-3歲幼兒");
+                List<ClassSummaryDTO> classes = Arrays.asList(summaryDTO);
+                when(service.searchClassesByInstitutionName("測試")).thenReturn(classes);
+
+                // When & Then
+                mockMvc.perform(get("/classes/search/institution")
+                                .param("name", "測試")
+                                .param("InstitutionID", testInstitutionId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(1)));
+
+                verify(service, times(1)).searchClassesByInstitutionName("測試");
+        }
+
+        @Test
+        void testSearchByInstitutionName_SizeZero_EmptyResult() throws Exception {
+                // Given - size <= 0 の場合、空のリストを返す
+                List<ClassSummaryDTO> classes = Arrays.asList(
+                                new ClassSummaryDTO(testClassId, "幼幼班", 20, "2歲", "3歲", "測試", testInstitutionId,
+                                                "desc"));
+                when(service.searchClassesByInstitutionName("測試")).thenReturn(classes);
+
+                // When & Then
+                mockMvc.perform(get("/classes/search/institution")
+                                .param("name", "測試")
+                                .param("size", "0")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(0)))
+                                .andExpect(jsonPath("$.totalPages", is(0)));
+        }
+
+        @Test
+        void testSearchByInstitutionName_OffsetBeyondResults() throws Exception {
+                // Given
+                List<ClassSummaryDTO> classes = Arrays.asList(
+                                new ClassSummaryDTO(testClassId, "幼幼班", 20, "2歲", "3歲", "測試", testInstitutionId,
+                                                "desc"));
+                when(service.searchClassesByInstitutionName("測試")).thenReturn(classes);
+
+                // When & Then - offset >= totalElements の場合、空のリストを返す
+                mockMvc.perform(get("/classes/search/institution")
+                                .param("name", "測試")
+                                .param("offset", "100")
+                                .param("size", "10")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(0)));
+        }
+
+        // ===== getClassNamesByInstitution 測試 =====
+        @Test
+        void testGetClassNamesByInstitution_Success() throws Exception {
+                // Given
+                Group4.Childcare.DTO.ClassNameDTO classNameDTO = new Group4.Childcare.DTO.ClassNameDTO(
+                                testClassId, "幼幼班");
+                List<Group4.Childcare.DTO.ClassNameDTO> classNames = Arrays.asList(classNameDTO);
+                when(service.getClassNamesByInstitutionId(testInstitutionId)).thenReturn(classNames);
+
+                // When & Then
+                mockMvc.perform(get("/classes/institution/{institutionId}/names", testInstitutionId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(1)))
+                                .andExpect(jsonPath("$[0].className", is("幼幼班")));
+
+                verify(service, times(1)).getClassNamesByInstitutionId(testInstitutionId);
+        }
+
+        // ===== decrementClassStudents 測試 =====
+        @Test
+        void testDecrementClassStudents_Success() throws Exception {
+                // Given
+                when(service.decrementCurrentStudents(testClassId)).thenReturn(true);
+
+                // When & Then
+                mockMvc.perform(put("/classes/{classId}/decrement-students", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)))
+                                .andExpect(jsonPath("$.message", is("學生數減少成功")));
+
+                verify(service, times(1)).decrementCurrentStudents(testClassId);
+        }
+
+        @Test
+        void testDecrementClassStudents_Failure() throws Exception {
+                // Given
+                when(service.decrementCurrentStudents(testClassId)).thenReturn(false);
+
+                // When & Then
+                mockMvc.perform(put("/classes/{classId}/decrement-students", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.success", is(false)))
+                                .andExpect(jsonPath("$.message", is("更新失敗")));
+
+                verify(service, times(1)).decrementCurrentStudents(testClassId);
+        }
+
+        @Test
+        void testDecrementClassStudents_Exception() throws Exception {
+                // Given
+                when(service.decrementCurrentStudents(testClassId)).thenThrow(new RuntimeException("學生數不能為負"));
+
+                // When & Then
+                mockMvc.perform(put("/classes/{classId}/decrement-students", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.success", is(false)))
+                                .andExpect(jsonPath("$.message", is("學生數不能為負")));
+
+                verify(service, times(1)).decrementCurrentStudents(testClassId);
+        }
+
+        // ===== checkClassFull 測試 =====
+        @Test
+        void testCheckClassFull_True() throws Exception {
+                // Given
+                when(service.isClassFull(testClassId)).thenReturn(true);
+
+                // When & Then
+                mockMvc.perform(get("/classes/{classId}/is-full", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.isFull", is(true)));
+
+                verify(service, times(1)).isClassFull(testClassId);
+        }
+
+        @Test
+        void testCheckClassFull_False() throws Exception {
+                // Given
+                when(service.isClassFull(testClassId)).thenReturn(false);
+
+                // When & Then
+                mockMvc.perform(get("/classes/{classId}/is-full", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.isFull", is(false)));
+
+                verify(service, times(1)).isClassFull(testClassId);
+        }
+
+        // ===== update 異常處理測試 =====
+        @Test
+        void testUpdate_NotFound() throws Exception {
+                // Given - RuntimeException (業務邏輯錯誤) の場合、404を返す
+                when(service.update(eq(testClassId), any(Classes.class)))
+                                .thenThrow(new RuntimeException("班級不存在"));
+
+                // When & Then
+                mockMvc.perform(put("/classes/{id}", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(testClass)))
+                                .andExpect(status().isNotFound());
+
+                verify(service, times(1)).update(eq(testClassId), any(Classes.class));
+        }
+
+        @Test
+        void testUpdate_SystemError() throws Exception {
+                // Given - RuntimeException (系統錯誤) の場合、500を返す
+                when(service.update(eq(testClassId), any(Classes.class)))
+                                .thenThrow(new RuntimeException("資料庫連線錯誤"));
+
+                // When & Then
+                mockMvc.perform(put("/classes/{id}", testClassId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(testClass)))
+                                .andExpect(status().isInternalServerError());
+
+                verify(service, times(1)).update(eq(testClassId), any(Classes.class));
+        }
 }
