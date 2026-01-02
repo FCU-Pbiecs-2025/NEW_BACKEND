@@ -14,11 +14,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -51,6 +54,9 @@ class UsersControllerTest {
     @Mock
     private ParentInfoService parentInfoService;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     @InjectMocks
     private UsersController controller;
 
@@ -78,6 +84,118 @@ class UsersControllerTest {
         testUser.setPermissionType((byte) 2);
     }
 
+    // ============================================================
+    // changePassword 測試
+    // ============================================================
+
+    @Test
+    void testChangePassword_Success() throws Exception {
+        // Given
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.encode("newPassword123")).thenReturn("encodedNewPassword");
+        when(usersService.updateUser(eq(testUserId), any(Users.class))).thenReturn(testUser);
+
+        Map<String, String> passwordRequest = Map.of("newPassword", "newPassword123");
+
+        // When & Then
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.message", is("密碼修改成功")));
+
+        verify(passwordEncoder).encode("newPassword123");
+        verify(usersService).updateUser(eq(testUserId), any(Users.class));
+    }
+
+    @Test
+    void testChangePassword_NewPasswordEmpty() throws Exception {
+        Map<String, String> passwordRequest = Map.of("newPassword", " ");
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("新密碼不能為空")));
+    }
+
+    @Test
+    void testChangePassword_NewPasswordNull() throws Exception {
+        // 模擬 newPassword 為 null 的情況
+        // 注意：Map.of 不允許 value 為 null，所以改用 HashMap
+        Map<String, String> passwordRequest = new HashMap<>();
+        passwordRequest.put("newPassword", null);
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("新密碼不能為空")));
+    }
+
+    @Test
+    void testChangePassword_NewPasswordTooShort() throws Exception {
+        Map<String, String> passwordRequest = Map.of("newPassword", "12345");
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("密碼長度至少為 6 個字元")));
+    }
+
+    @Test
+    void testChangePassword_UserNotFound() throws Exception {
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.empty());
+        Map<String, String> passwordRequest = Map.of("newPassword", "newPassword123");
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("使用者不存在")));
+    }
+
+    @Test
+    void testChangePassword_PermissionDenied() throws Exception {
+        testUser.setPermissionType((byte) 1); // 設定為非 admin
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.of(testUser));
+        Map<String, String> passwordRequest = Map.of("newPassword", "newPassword123");
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", is("只有管理員可以修改密碼")));
+    }
+
+    @Test
+    void testChangePassword_PermissionNull() throws Exception {
+        testUser.setPermissionType(null); // 設定為 null
+        when(usersService.getUserById(testUserId)).thenReturn(Optional.of(testUser));
+        Map<String, String> passwordRequest = Map.of("newPassword", "newPassword123");
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", is("只有管理員可以修改密碼")));
+    }
+
+    @Test
+    void testChangePassword_ServiceException() throws Exception {
+        when(usersService.getUserById(testUserId)).thenThrow(new RuntimeException("DB Error"));
+        Map<String, String> passwordRequest = Map.of("newPassword", "newPassword123");
+
+        mockMvc.perform(put("/users/{id}/password", testUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(passwordRequest)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message", is("密碼修改失敗，請稍後再試")));
+    }
+
+    // ... (原有的測試)
     @Test
     void testCreateUser_Success() throws Exception {
         // Given
