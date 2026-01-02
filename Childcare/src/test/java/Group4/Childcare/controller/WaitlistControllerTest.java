@@ -284,7 +284,13 @@ class WaitlistControllerTest {
                 // 容量充足，全部錄取 (Case A)
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(100);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
-                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+                
+                // 修正：必須提供所有 key 的值
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
                 List<Map<String, Object>> p1 = new ArrayList<>();
@@ -338,7 +344,13 @@ class WaitlistControllerTest {
 
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
-                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+                
+                // 修正：必須提供所有 key 的值
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
                 List<Map<String, Object>> p1 = new ArrayList<>();
@@ -375,7 +387,13 @@ class WaitlistControllerTest {
 
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
-                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+                
+                // 修正：必須提供所有 key 的值
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
                 List<Map<String, Object>> p1 = new ArrayList<>();
@@ -837,7 +855,13 @@ class WaitlistControllerTest {
 
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
-                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+                
+                // 修正：必須提供所有 key 的值
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
                 List<Map<String, Object>> p2 = new ArrayList<>();
@@ -868,7 +892,13 @@ class WaitlistControllerTest {
 
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
-                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+                
+                // 修正：必須提供所有 key 的值
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
                 List<Map<String, Object>> p1 = new ArrayList<>();
