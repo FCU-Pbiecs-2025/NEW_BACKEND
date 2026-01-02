@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import jakarta.mail.MessagingException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -890,7 +891,7 @@ class WaitlistControllerTest {
                                 .andExpect(jsonPath("$.waitlisted", is(1))); // 候補 1 人
         }
 
-        // Willium1925修改：測試 assignClassAndAdmit 的各種分支
+        // Willium1925修改：測試 assignClassAndAdmit 的各種分支（確保覆蓋 LocalDate 分支）
         @Test
         void testAssignClassAndAdmit_Variations() throws Exception {
                 LotteryRequest request = new LotteryRequest();
@@ -899,7 +900,6 @@ class WaitlistControllerTest {
                 when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
                 when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
                 
-                // 修正：必須提供所有 key 的值
                 Map<Integer, Integer> acceptedCount = new HashMap<>();
                 acceptedCount.put(1, 0);
                 acceptedCount.put(2, 0);
@@ -908,13 +908,17 @@ class WaitlistControllerTest {
 
                 Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
                 List<Map<String, Object>> p1 = new ArrayList<>();
-                // 1. BirthDate 為 LocalDate
+
+                // 1. BirthDate 為 LocalDate（確保覆蓋 instanceof LocalDate 分支）
+                LocalDate testBirthDate = java.time.LocalDate.of(2020, 6, 15);
                 Map<String, Object> app1 = createApplicant("P1-LocalDate", null);
-                app1.put("BirthDate", java.time.LocalDate.now());
+                app1.put("BirthDate", testBirthDate);  // 直接使用 LocalDate 對象
                 p1.add(app1);
-                // 2. 找不到適合班級
+
+                // 2. 找不到適合班級（使用 java.sql.Date）
                 Map<String, Object> app2 = createApplicant("P1-NoClass", "2020-01-01");
                 p1.add(app2);
+
                 applicantsByPriority.put(1, p1);
                 applicantsByPriority.put(2, new ArrayList<>());
                 applicantsByPriority.put(3, new ArrayList<>());
@@ -922,10 +926,13 @@ class WaitlistControllerTest {
 
                 // Mock 行為
                 when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
-                // 讓 app1 找到班級
-                when(waitlistJdbcRepository.findSuitableClass(any(java.time.LocalDate.class), any())).thenReturn(testClassId);
+
+                // 讓 app1 找到班級（使用 eq 來匹配特定的 LocalDate）
+                when(waitlistJdbcRepository.findSuitableClass(eq(testBirthDate), any())).thenReturn(testClassId);
+
                 // 讓 app2 找不到班級
                 when(waitlistJdbcRepository.findSuitableClass(eq(java.sql.Date.valueOf("2020-01-01").toLocalDate()), any())).thenReturn(null);
+
                 when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
 
                 mockMvc.perform(post("/waitlist/lottery")
@@ -934,6 +941,156 @@ class WaitlistControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.firstPriorityAccepted", is(1)))
                                 .andExpect(jsonPath("$.waitlisted", is(1)));
+
+                // 驗證 findSuitableClass 被用 LocalDate 調用過（確保覆蓋 instanceof LocalDate 分支）
+                verify(waitlistJdbcRepository).findSuitableClass(eq(testBirthDate), any());
+        }
+
+        // Willium1925新增：測試同步更新記憶體中的班級資訊（覆蓋 classId 匹配分支）
+        @Test
+        void testAssignClassAndAdmit_UpdateClassInfoInMemory() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
+
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(20);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
+
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                List<Map<String, Object>> p1 = new ArrayList<>();
+
+                // 測試 LocalDate 類型的 BirthDate (覆蓋黃色分支 - instanceof LocalDate)
+                LocalDate birthDate1 = java.time.LocalDate.of(2020, 1, 15);
+                Map<String, Object> app1 = createApplicant("P1-App1", null);
+                app1.put("BirthDate", birthDate1);  // 直接使用 LocalDate 對象
+                p1.add(app1);
+
+                // 測試 java.sql.Date 類型的 BirthDate (確保兩種類型都被測試到)
+                Map<String, Object> app2 = createApplicant("P1-App2", "2020-02-20");
+                p1.add(app2);
+
+                applicantsByPriority.put(1, p1);
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, new ArrayList<>());
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId)).thenReturn(applicantsByPriority);
+
+                // 創建班級資訊列表，用於測試記憶體更新
+                // 這個列表會測試 for 循環和 classId 匹配邏輯（覆蓋黃色和紅色分支）
+                List<Map<String, Object>> classInfoList = new ArrayList<>();
+
+                // 先添加一個不匹配的班級（測試 if 條件為 false 的情況）
+                UUID anotherClassId = UUID.randomUUID();
+                Map<String, Object> classInfo2 = new HashMap<>();
+                classInfo2.put("ClassID", anotherClassId);
+                classInfo2.put("ClassName", "另一個班級");
+                classInfo2.put("CurrentStudents", 3);
+                classInfo2.put("Capacity", 8);
+                classInfoList.add(classInfo2);
+
+                // 再添加匹配的班級（測試 if 條件為 true 和 break 的情況）
+                Map<String, Object> classInfo1 = new HashMap<>();
+                classInfo1.put("ClassID", testClassId);
+                classInfo1.put("ClassName", "測試班級");
+                classInfo1.put("CurrentStudents", 5);
+                classInfo1.put("Capacity", 10);
+                classInfoList.add(classInfo1);
+
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(classInfoList);
+
+                // Mock findSuitableClass - 針對不同類型的日期分別設置
+                when(waitlistJdbcRepository.findSuitableClass(eq(birthDate1), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.findSuitableClass(eq(java.sql.Date.valueOf("2020-02-20").toLocalDate()), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
+
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.firstPriorityAccepted", is(2)))
+                                .andExpect(jsonPath("$.waitlisted", is(0)));
+
+                // 驗證記憶體中的班級資訊被正確更新
+                verify(waitlistJdbcRepository, times(2)).updateClassCurrentStudents(eq(testClassId), eq(1));
+                // 驗證 LocalDate 分支被執行
+                verify(waitlistJdbcRepository).findSuitableClass(eq(birthDate1), any());
+        }
+
+        // Willium1925新增：確保覆蓋 classId 匹配邏輯的所有路徑
+        @Test
+        void testAssignClassAndAdmit_ClassIdMatchingLogic() throws Exception {
+                LotteryRequest request = new LotteryRequest();
+                request.setInstitutionId(testInstitutionId);
+
+                when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
+                when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
+
+                Map<Integer, Integer> acceptedCount = new HashMap<>();
+                acceptedCount.put(1, 0);
+                acceptedCount.put(2, 0);
+                acceptedCount.put(3, 0);
+                when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+
+                Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+                List<Map<String, Object>> p3 = new ArrayList<>();
+
+                // 使用 LocalDate 來確保覆蓋 instanceof LocalDate 分支
+                LocalDate birthDate = java.time.LocalDate.of(2021, 5, 10);
+                Map<String, Object> app = createApplicant("P3-App", null);
+                app.put("BirthDate", birthDate);  // 直接使用 LocalDate 對象
+                p3.add(app);
+
+                applicantsByPriority.put(1, new ArrayList<>());
+                applicantsByPriority.put(2, new ArrayList<>());
+                applicantsByPriority.put(3, p3);
+                when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId)).thenReturn(applicantsByPriority);
+
+                // 創建多個班級，測試遍歷邏輯
+                List<Map<String, Object>> classInfoList = new ArrayList<>();
+
+                // 第一個不匹配的班級
+                UUID class1 = UUID.randomUUID();
+                Map<String, Object> info1 = new HashMap<>();
+                info1.put("ClassID", class1);
+                info1.put("CurrentStudents", 1);
+                classInfoList.add(info1);
+
+                // 第二個不匹配的班級
+                UUID class2 = UUID.randomUUID();
+                Map<String, Object> info2 = new HashMap<>();
+                info2.put("ClassID", class2);
+                info2.put("CurrentStudents", 2);
+                classInfoList.add(info2);
+
+                // 第三個匹配的班級（測試 break）
+                Map<String, Object> info3 = new HashMap<>();
+                info3.put("ClassID", testClassId);
+                info3.put("CurrentStudents", 3);
+                classInfoList.add(info3);
+
+                // 第四個班級（不應該被訪問到，因為上面 break 了）
+                UUID class4 = UUID.randomUUID();
+                Map<String, Object> info4 = new HashMap<>();
+                info4.put("ClassID", class4);
+                info4.put("CurrentStudents", 4);
+                classInfoList.add(info4);
+
+                when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(classInfoList);
+                when(waitlistJdbcRepository.findSuitableClass(eq(birthDate), any())).thenReturn(testClassId);
+                when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
+
+                mockMvc.perform(post("/waitlist/lottery")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.thirdPriorityAccepted", is(1)));
+
+                // 驗證 LocalDate 分支被執行
+                verify(waitlistJdbcRepository).findSuitableClass(eq(birthDate), any());
         }
 
         // Willium1925新增：sendLotteryNotificationEmails 全覆蓋測試
@@ -956,58 +1113,109 @@ class WaitlistControllerTest {
 
             // --- 錄取者 (P1) ---
             List<Map<String, Object>> p1 = new ArrayList<>();
-            // 1. CaseNumber=null
+
+            // 測試 CaseNumber = null 分支
             Map<String, Object> app1 = createApplicant("App1", "2020-01-01");
             app1.put("CaseNumber", null);
+            app1.put("ApplicationDate", LocalDateTime.now());
             p1.add(app1);
-            // 2. ApplicationDate=java.sql.Date
+
+            // 測試 CaseNumber 正常值 + ApplicationDate = java.sql.Timestamp
             Map<String, Object> app2 = createApplicant("App2", "2020-01-01");
-            app2.put("ApplicationDate", java.sql.Date.valueOf("2023-01-01"));
+            app2.put("CaseNumber", 12345L);
+            app2.put("ApplicationDate", new java.sql.Timestamp(System.currentTimeMillis()));
             p1.add(app2);
-            // 3. ApplicationDate=LocalDate
+
+            // 測試 ApplicationDate = java.sql.Date
             Map<String, Object> app3 = createApplicant("App3", "2020-01-01");
-            app3.put("ApplicationDate", java.time.LocalDate.now());
+            app3.put("CaseNumber", 23456);
+            app3.put("ApplicationDate", java.sql.Date.valueOf("2023-01-01"));
             p1.add(app3);
-            // 4. Email=null
+
+            // 測試 ApplicationDate = LocalDate
             Map<String, Object> app4 = createApplicant("App4", "2020-01-01");
-            app4.put("Email", null);
+            app4.put("ApplicationDate", java.time.LocalDate.now());
             p1.add(app4);
-            // 5. Email=""
+
+            // 測試 ApplicationDate = String
             Map<String, Object> app5 = createApplicant("App5", "2020-01-01");
-            app5.put("Email", "");
+            app5.put("ApplicationDate", "2023-01-15");
             p1.add(app5);
 
-            // --- 候補者 (P3) ---
-            // 為了讓 P3 變成候補，我們讓 P3 申請人數 > P3 名額 (名額=20*0.7=14)
-            // 但這裡我們直接用 Mock 讓 P3 沒被錄取比較快：
-            // 其實只要讓 P3 申請人很多，或者讓 P3 名額很少即可。
-            // 這裡我們用簡單的方法：讓 P3 申請人很多，且讓 findSuitableClass 回傳 null (沒班級可念 -> 候補)
-
-            List<Map<String, Object>> p3 = new ArrayList<>();
-            // 6. CaseNumber=null
+            // 測試 Email = null 分支
             Map<String, Object> app6 = createApplicant("App6", "2020-01-01");
-            app6.put("CaseNumber", null);
-            p3.add(app6);
-            // 7. ApplicationDate=java.sql.Date
+            app6.put("Email", null);
+            p1.add(app6);
+
+            // 測試 Email = "" 分支
             Map<String, Object> app7 = createApplicant("App7", "2020-01-01");
-            app7.put("ApplicationDate", java.sql.Date.valueOf("2023-01-01"));
-            p3.add(app7);
-            // 8. ApplicationDate=LocalDate
+            app7.put("Email", "");
+            p1.add(app7);
+
+            // 測試錄取者的 Exception 處理
             Map<String, Object> app8 = createApplicant("App8", "2020-01-01");
-            app8.put("ApplicationDate", java.time.LocalDate.now());
-            p3.add(app8);
-            // 9. Email=null
-            Map<String, Object> app9 = createApplicant("App9", "2020-01-01");
-            app9.put("Email", null);
+            app8.put("Email", "accepted-error@example.com");
+            p1.add(app8);
+
+            // --- 候補者 (P3) ---
+            List<Map<String, Object>> p3 = new ArrayList<>();
+
+            // 測試 CaseNumber = null 分支
+            Map<String, Object> app9 = createApplicant("App9", "2021-01-01");
+            app9.put("CaseNumber", null);
+            app9.put("ApplicationDate", LocalDateTime.now());
+            app9.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
             p3.add(app9);
-            // 10. MessagingException
-            Map<String, Object> app10 = createApplicant("App10", "2020-01-01");
-            app10.put("Email", "msg-error@example.com");
+
+            // 測試 CaseNumber 正常值 + ApplicationDate = java.sql.Timestamp
+            Map<String, Object> app10 = createApplicant("App10", "2021-01-01");
+            app10.put("CaseNumber", 34567L);
+            app10.put("ApplicationDate", new java.sql.Timestamp(System.currentTimeMillis()));
+            app10.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
             p3.add(app10);
-            // 11. RuntimeException
-            Map<String, Object> app11 = createApplicant("App11", "2020-01-01");
-            app11.put("Email", "run-error@example.com");
+
+            // 測試 ApplicationDate = java.sql.Date
+            Map<String, Object> app11 = createApplicant("App11", "2021-01-01");
+            app11.put("CaseNumber", 45678);
+            app11.put("ApplicationDate", java.sql.Date.valueOf("2023-02-01"));
+            app11.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
             p3.add(app11);
+
+            // 測試 ApplicationDate = LocalDate
+            Map<String, Object> app12 = createApplicant("App12", "2021-01-01");
+            app12.put("ApplicationDate", java.time.LocalDate.now());
+            app12.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            p3.add(app12);
+
+            // 測試 ApplicationDate = String
+            Map<String, Object> app13 = createApplicant("App13", "2021-01-01");
+            app13.put("ApplicationDate", "2023-03-01");
+            app13.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            p3.add(app13);
+
+            // 測試 Email = null 分支
+            Map<String, Object> app14 = createApplicant("App14", "2021-01-01");
+            app14.put("Email", null);
+            app14.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            p3.add(app14);
+
+            // 測試 Email = "" 分支
+            Map<String, Object> app15 = createApplicant("App15", "2021-01-01");
+            app15.put("Email", "");
+            app15.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            p3.add(app15);
+
+            // 測試 MessagingException 分支
+            Map<String, Object> app16 = createApplicant("App16", "2021-01-01");
+            app16.put("Email", "msg-error@example.com");
+            app16.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            p3.add(app16);
+
+            // 測試 RuntimeException (其他 Exception) 分支
+            Map<String, Object> app17 = createApplicant("App17", "2021-01-01");
+            app17.put("Email", "run-error@example.com");
+            app17.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            p3.add(app17);
 
             applicantsByPriority.put(1, p1);
             applicantsByPriority.put(2, new ArrayList<>());
@@ -1015,39 +1223,46 @@ class WaitlistControllerTest {
             when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId)).thenReturn(applicantsByPriority);
 
             // 讓 P1 錄取
-            when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
-            when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
-
-            // 讓 P3 候補 (模擬找不到班級)
-            // 注意：這裡需要區分 P1 和 P3 的呼叫。
-            // P1 的生日都是 2020-01-01 (除了 app3 是 LocalDate.now())
-            // P3 的生日也都是 2020-01-01
-            // 為了簡單起見，我們讓 findSuitableClass 第一次呼叫回傳 classId (給 P1)，之後回傳 null (給 P3)
-            // 但因為 P1 有 5 個人，P3 有 6 個人，這樣寫比較麻煩。
-            // 更好的方法：讓 P3 的生日跟 P1 不一樣。
-
-            // 修改 P3 生日為 2021-01-01
-            for(Map<String, Object> app : p3) {
-                app.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
-            }
-
-            // P1 (2020) -> 錄取
             when(waitlistJdbcRepository.findSuitableClass(eq(java.sql.Date.valueOf("2020-01-01").toLocalDate()), any())).thenReturn(testClassId);
             when(waitlistJdbcRepository.findSuitableClass(eq(java.time.LocalDate.now()), any())).thenReturn(testClassId);
+            when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
 
-            // P3 (2021) -> 候補 (找不到班級)
+            // 讓 P3 候補 (找不到班級)
             when(waitlistJdbcRepository.findSuitableClass(eq(java.sql.Date.valueOf("2021-01-01").toLocalDate()), any())).thenReturn(null);
 
             when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
 
-            // Mock Email Exceptions
-            doThrow(new MessagingException("Mail Error")).when(emailService).sendApplicationStatusChangeEmail(eq("msg-error@example.com"), any(), any(), any(), any(), any(), any(), any(), any());
-            doThrow(new RuntimeException("Run Error")).when(emailService).sendApplicationStatusChangeEmail(eq("run-error@example.com"), any(), any(), any(), any(), any(), any(), any(), any());
+            // Mock Email Exceptions - 錄取者的異常
+            doThrow(new RuntimeException("Accepted Send Error"))
+                    .when(emailService).sendApplicationStatusChangeEmail(
+                            eq("accepted-error@example.com"),
+                            any(), any(), any(), any(), any(), any(),
+                            eq(null), // 錄取者的 currentOrder 是 null
+                            any());
+
+            // Mock Email Exceptions - 候補者的異常
+            doThrow(new MessagingException("Mail Error"))
+                    .when(emailService).sendApplicationStatusChangeEmail(
+                            eq("msg-error@example.com"),
+                            any(), any(), any(), any(), any(), any(),
+                            any(Integer.class), // 候補者有 currentOrder
+                            any());
+
+            doThrow(new RuntimeException("Run Error"))
+                    .when(emailService).sendApplicationStatusChangeEmail(
+                            eq("run-error@example.com"),
+                            any(), any(), any(), any(), any(), any(),
+                            any(Integer.class), // 候補者有 currentOrder
+                            any());
 
             mockMvc.perform(post("/waitlist/lottery")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk());
+
+            // 驗證正常的郵件發送被呼叫了
+            verify(emailService, atLeastOnce()).sendApplicationStatusChangeEmail(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         // Willium1925修改:Helper method
