@@ -22,6 +22,10 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **TC-PR-01** | **Email 存在** | Email: "exist@example.com" | 1. 查詢 User 成功<br>2. 呼叫 `invalidateAllTokensByUserID`<br>3. 生成 Token 並 Hash<br>4. 儲存 Token 到 DB<br>5. 呼叫 `mailSender.send` | 回傳成功 Result<br>驗證 Repository `save` 被呼叫<br>驗證 `mailSender` 被呼叫 |
 | **TC-PR-02** | **Email 不存在** | Email: "nonexist@example.com" | 1. 查詢 User 失敗 (Empty)<br>2. **不** 執行後續 Token 生成與寄信 | 回傳成功 Result (安全考量不報錯)<br>驗證 Repository `save` **未** 被呼叫<br>驗證 `mailSender` **未** 被呼叫 |
+| **TC-PR-08** | **清除舊 Token 失敗** | Email: "exist@example.com" | 1. 查詢 User 成功<br>2. `invalidateAllTokensByUserID` 拋出異常<br>3. 繼續執行後續流程 | 回傳成功 Result<br>驗證 Token 仍被儲存 |
+| **TC-PR-09** | **未預期錯誤** | Email: "error@example.com" | 1. `findByEmail` 拋出 RuntimeException | 拋出 RuntimeException (包裝過的錯誤訊息) |
+| **TC-PR-10** | **寄信失敗** | Email: "exist@example.com" | 1. ...<br>2. `mailSender.send` 拋出 MailException<br>3. 流程繼續 | 回傳成功 Result<br>驗證 Token 已儲存 |
+| **TC-PR-15** | **User Name 為 Null** | Email: "nullname@example.com" | 1. User 物件 Name 為 null<br>2. 寄信時使用預設稱謂 | 回傳成功 Result<br>驗證 `mailSender` 被呼叫 (覆蓋三元運算子分支) |
 
 ### 4.2 驗證 Token (verifyToken)
 | ID | 測試情境 | 輸入資料 | 預期路徑/行為 | 預期結果 |
@@ -30,11 +34,15 @@
 | **TC-PR-04** | **Token 過期** | Email: "user@example.com"<br>Token: "expired-raw-token" | 1. ...<br>2. ...<br>3. 查詢 DB 發現 Token `ExpiresAt` < `Now` | 回傳 `false` (透過 Repository 過濾或邏輯判斷) |
 | **TC-PR-05** | **Token 已失效 (Invalidated)** | Email: "user@example.com"<br>Token: "used-raw-token" | 1. ...<br>2. ...<br>3. 查詢 DB 發現 Token `Invalidated` = `true` | 回傳 `false` |
 | **TC-PR-06** | **Token 雜湊不符** | Email: "user@example.com"<br>Token: "wrong-token" | 1. ...<br>2. 計算 Hash<br>3. 查詢 DB 找不到對應 Hash 的 Token | 回傳 `false` |
+| **TC-PR-11** | **UserID 不匹配** | Email: "user@example.com"<br>Token: "other-user-token" | 1. ...<br>2. ...<br>3. Token 存在但 UserID 與 Email 對應的 UserID 不同 | 回傳 `false` |
 
 ### 4.3 重設密碼 (resetPassword)
 | ID | 測試情境 | 輸入資料 | 預期路徑/行為 | 預期結果 |
 | :--- | :--- | :--- | :--- | :--- |
 | **TC-PR-07** | **重設成功** | Token: "valid-token"<br>NewPass: "newPass123" | 1. 驗證 Token 有效<br>2. 查詢 User<br>3. 呼叫 `passwordEncoder.encode`<br>4. 更新 User 密碼<br>5. 將 Token 設為失效 (Invalidated=true) | 回傳 `true`<br>驗證 UserRepo `save` 被呼叫<br>驗證 TokenRepo `save` 被呼叫 (更新狀態) |
+| **TC-PR-12** | **重設失敗 (驗證不過)** | Email: "user@example.com"<br>Token: "invalid"<br>NewPass: "123" | 1. `verifyToken` 回傳 false<br>2. 不執行重設 | 回傳 `false`<br>驗證 UserRepo `save` 未被呼叫 |
+| **TC-PR-13** | **重設失敗 (User不存在)** | Token: "valid-token"<br>NewPass: "123" | 1. Token 有效<br>2. `findById` 找不到 User | 回傳 `false`<br>驗證 UserRepo `save` 未被呼叫 |
+| **TC-PR-14** | **重設成功 (含Email)** | Email: "user@example.com"<br>Token: "valid"<br>NewPass: "123" | 1. `verifyToken` 回傳 true<br>2. 呼叫 `resetPasswordInternal`<br>3. 執行重設流程 | 回傳 `true`<br>驗證 UserRepo `save` 被呼叫 |
 
 ## 5. 覆蓋率目標 (Coverage Goal)
 *   **Line Coverage**: > 90%
