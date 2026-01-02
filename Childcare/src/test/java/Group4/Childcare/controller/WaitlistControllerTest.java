@@ -794,6 +794,41 @@ class WaitlistControllerTest {
                                 .andExpect(jsonPath("$.waitlisted", is(1)));
             }
 
+        // Willium1925修改
+        @Test
+        void testConductLottery_ThirdPriorityLotteryRequired() throws Exception {
+            LotteryRequest request = new LotteryRequest();
+            request.setInstitutionId(testInstitutionId);
+
+            when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
+            when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(5); // 5 個空位
+            when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+
+            Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+            applicantsByPriority.put(1, new ArrayList<>());
+            applicantsByPriority.put(2, new ArrayList<>());
+            List<Map<String, Object>> p3 = new ArrayList<>();
+            p3.add(createApplicant("P3-A", "2020-01-01"));
+            p3.add(createApplicant("P3-B", "2020-01-01"));
+            p3.add(createApplicant("P3-C", "2020-01-01"));
+            p3.add(createApplicant("P3-D", "2020-01-01"));
+            p3.add(createApplicant("P3-E", "2020-01-01"));
+            p3.add(createApplicant("P3-F", "2020-01-01")); // 6 人申請
+            applicantsByPriority.put(3, p3);
+            when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId)).thenReturn(applicantsByPriority);
+
+            when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
+            when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
+            when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+
+            mockMvc.perform(post("/waitlist/lottery")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.thirdPriorityAccepted", is(5))) // 5 個空位
+                    .andExpect(jsonPath("$.waitlisted", is(1))); // 1 人候補
+        }
+
         // Willium1925修改：測試 assignClassAndAdmit 的 false 分支
         @Test
         void testConductLottery_AssignClassAdmitReturnsFalse() throws Exception {
