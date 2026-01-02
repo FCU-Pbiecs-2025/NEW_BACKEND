@@ -39,27 +39,28 @@ public class UsersController {
     }
 
     /**
-     * GET  /users/{id}
+     * GET /users/{id}
      * 範例資料為
      * {
-     *     "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *     "account": "inst001",
-     *     "password": "$2a$10$xYzHashedPasswordExample2234567890",
-     *     "accountStatus": 1,
-     *     "permissionType": 2,
-     *     "name": "王小明",
-     *     "gender": true,
-     *     "phoneNumber": "0923456789",
-     *     "mailingAddress": "台北市中正區重慶南路一段100號",
-     *     "email": "wang@institution.com",
-     *     "birthDate": "1985-03-20",
-     *     "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
-     *     "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
-     *     "nationalID": "B234567890"
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "account": "inst001",
+     * "password": "$2a$10$xYzHashedPasswordExample2234567890",
+     * "accountStatus": 1,
+     * "permissionType": 2,
+     * "name": "王小明",
+     * "gender": true,
+     * "phoneNumber": "0923456789",
+     * "mailingAddress": "台北市中正區重慶南路一段100號",
+     * "email": "wang@institution.com",
+     * "birthDate": "1985-03-20",
+     * "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
+     * "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
+     * "nationalID": "B234567890"
      * }
      * 依使用者ID取得使用者資料
+     * 
      * @param id 使用者ID
-     *@return 使用者資料
+     * @return 使用者資料
      */
 
     @GetMapping("/{id}")
@@ -73,54 +74,53 @@ public class UsersController {
         return usersService.getAllUsers();
     }
 
-
     /**
-     * GET  /users/offset
+     * GET /users/offset
      * 範例資料:
      * {
-     *     "offset": 0,
-     *     "size": 10,
-     *     "totalPages": 1,
-     *     "hasNext": false,
-     *     "content": [
-     *         {
-     *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *             "account": "inst001",
-     *             "institutionName": "小天使托嬰中心",
-     *             "permissionType": 2,
-     *             "accountStatus": 1
-     *         },
-     *         {
-     *             "userID": "c6948f8d-de54-40ba-9bb8-18dec3880c5b",
-     *             "account": "parent002",
-     *             "institutionName": null,
-     *             "permissionType": 3,
-     *             "accountStatus": 1
-     *         },
-     *         {
-     *             "userID": "e2960508-6922-4b58-a8ce-6f9f94579b41",
-     *             "account": "admin001",
-     *             "institutionName": null,
-     *             "permissionType": 1,
-     *             "accountStatus": 1
-     *         },
-     *         {
-     *             "userID": "b8b2c453-9604-4b2e-b435-c097d141d5c2",
-     *             "account": "parent001",
-     *             "institutionName": null,
-     *             "permissionType": 3,
-     *             "accountStatus": 1
-     *         }
-     *     ],
-     *     "totalElements": 4
+     * "offset": 0,
+     * "size": 10,
+     * "totalPages": 1,
+     * "hasNext": false,
+     * "content": [
+     * {
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "account": "inst001",
+     * "institutionName": "小天使托嬰中心",
+     * "permissionType": 2,
+     * "accountStatus": 1
+     * },
+     * {
+     * "userID": "c6948f8d-de54-40ba-9bb8-18dec3880c5b",
+     * "account": "parent002",
+     * "institutionName": null,
+     * "permissionType": 3,
+     * "accountStatus": 1
+     * },
+     * {
+     * "userID": "e2960508-6922-4b58-a8ce-6f9f94579b41",
+     * "account": "admin001",
+     * "institutionName": null,
+     * "permissionType": 1,
+     * "accountStatus": 1
+     * },
+     * {
+     * "userID": "b8b2c453-9604-4b2e-b435-c097d141d5c2",
+     * "account": "parent001",
+     * "institutionName": null,
+     * "permissionType": 3,
+     * "accountStatus": 1
      * }
-     *後台帳號管理頁面使用
-     *以 offset 分頁方式取得使用者列表
+     * ],
+     * "totalElements": 4
+     * }
+     * 後台帳號管理頁面使用
+     * 以 offset 分頁方式取得使用者列表
      *
      * @param offset 起始位置
      * @param size   頁面大小
      * @return 分頁使用者列表及分頁資訊
-     * permissionType=3 為一般使用者，permissionType=1 為管理員,permissionType=2 為機構人員
+     *         permissionType=3 為一般使用者，permissionType=1 為管理員,permissionType=2 為機構人員
      **/
     @GetMapping("/offset")
     public ResponseEntity<Map<String, Object>> getUsersByOffsetJdbc(
@@ -132,7 +132,8 @@ public class UsersController {
             }
 
             final int MAX_SIZE = 100;
-            if (size > MAX_SIZE) size = MAX_SIZE;
+            if (size > MAX_SIZE)
+                size = MAX_SIZE;
 
             List<UserSummaryDTO> users = usersService.getUsersWithOffsetAndInstitutionNameJdbc(offset, size);
             long totalCount = usersService.getTotalCount();
@@ -158,29 +159,29 @@ public class UsersController {
     }
 
     /**
-     * GET  /users/search
+     * GET /users/search
      * 範例資料:
      * {
-     *     "offset": 0,
-     *     "size": 10,
-     *     "totalPages": 1,
-     *     "hasNext": false,
-     *     "content": [
-     *         {
-     *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *             "account": "inst001",
-     *             "institutionName": "小天使托嬰中心",
-     *             "permissionType": 2,
-     *             "accountStatus": 1
-     *         }
-     *     ],
-     *     "totalElements": 1
+     * "offset": 0,
+     * "size": 10,
+     * "totalPages": 1,
+     * "hasNext": false,
+     * "content": [
+     * {
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "account": "inst001",
+     * "institutionName": "小天使托嬰中心",
+     * "permissionType": 2,
+     * "accountStatus": 1
+     * }
+     * ],
+     * "totalElements": 1
      * }
      * 以帳號模糊查詢使用者列表（支援分頁）
      *
      * @param account 帳號關鍵字
-     * @param offset 起始位置
-     * @param size   頁面大小
+     * @param offset  起始位置
+     * @param size    頁面大小
      * @return 分頁使用者列表及分頁資訊
      **/
     @GetMapping("/search2")
@@ -198,7 +199,8 @@ public class UsersController {
             }
 
             final int MAX_SIZE = 100;
-            if (size > MAX_SIZE) size = MAX_SIZE;
+            if (size > MAX_SIZE)
+                size = MAX_SIZE;
 
             String searchKeyword = account.trim();
             List<UserSummaryDTO> users = usersService.searchUsersByAccountWithOffset(searchKeyword, offset, size);
@@ -225,29 +227,29 @@ public class UsersController {
     }
 
     /**
-     * GET  /users/SEARCH3
+     * GET /users/SEARCH3
      * 範例資料:
      * {
-     *     "offset": 0,
-     *     "size": 10,
-     *     "totalPages": 1,
-     *     "hasNext": false,
-     *     "content": [
-     *         {
-     *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *             "account": "citizen001",
-     *             "institutionName": null,
-     *             "permissionType": 3,
-     *             "accountStatus": 1
-     *         }
-     *     ],
-     *     "totalElements": 1
+     * "offset": 0,
+     * "size": 10,
+     * "totalPages": 1,
+     * "hasNext": false,
+     * "content": [
+     * {
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "account": "citizen001",
+     * "institutionName": null,
+     * "permissionType": 3,
+     * "accountStatus": 1
+     * }
+     * ],
+     * "totalElements": 1
      * }
      * 以帳號模糊查詢民眾帳號列表 (permissionType = 3)（支援分頁）
      *
      * @param account 帳號關鍵字
-     * @param offset 起始位置
-     * @param size   頁面大小
+     * @param offset  起始位置
+     * @param size    頁面大小
      * @return 分頁民眾帳號列表及分頁資訊
      **/
     @GetMapping("/SEARCH3")
@@ -261,10 +263,12 @@ public class UsersController {
             }
 
             final int MAX_SIZE = 100;
-            if (size > MAX_SIZE) size = MAX_SIZE;
+            if (size > MAX_SIZE)
+                size = MAX_SIZE;
 
             String searchKeyword = account != null ? account.trim() : "";
-            List<UserSummaryDTO> users = usersService.searchCitizenUsersByAccountWithOffset(searchKeyword, offset, size);
+            List<UserSummaryDTO> users = usersService.searchCitizenUsersByAccountWithOffset(searchKeyword, offset,
+                    size);
             long totalCount = usersService.getSearchCitizenTotalCount(searchKeyword);
 
             Map<String, Object> response = new HashMap<>();
@@ -291,23 +295,24 @@ public class UsersController {
      * PUT /users/{id}
      * body 範例資料:
      * {
-     *     "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *     "account": "inst001",
-     *     "password": "$2a$10$xYzHashedPasswordExample2234567890",
-     *     "accountStatus": 1,
-     *     "permissionType": 1,
-     *     "name": "王小明",
-     *     "gender": true,
-     *     "phoneNumber": "0923456789",
-     *     "mailingAddress": "台北市中正區重慶南路一段100號",
-     *     "email": "wang@institution.com",
-     *     "birthDate": "1985-03-20",
-     *     "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
-     *     "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
-     *     "nationalID": "B234567890"
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "account": "inst001",
+     * "password": "$2a$10$xYzHashedPasswordExample2234567890",
+     * "accountStatus": 1,
+     * "permissionType": 1,
+     * "name": "王小明",
+     * "gender": true,
+     * "phoneNumber": "0923456789",
+     * "mailingAddress": "台北市中正區重慶南路一段100號",
+     * "email": "wang@institution.com",
+     * "birthDate": "1985-03-20",
+     * "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
+     * "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
+     * "nationalID": "B234567890"
      * }
      * 更新使用者資料
-     * @param id 使用者ID
+     * 
+     * @param id   使用者ID
      * @param user 使用者資料
      * @return 更新後的使用者資料
      */
@@ -322,7 +327,8 @@ public class UsersController {
      * body 範例: { "accountStatus": 0 }
      */
     @PutMapping("/{id}/status")
-    public ResponseEntity<Map<String, Object>> updateAccountStatus(@PathVariable UUID id, @RequestBody Map<String, Object> request) {
+    public ResponseEntity<Map<String, Object>> updateAccountStatus(@PathVariable UUID id,
+            @RequestBody Map<String, Object> request) {
         Map<String, Object> result = new HashMap<>();
         try {
             if (!request.containsKey("accountStatus")) {
@@ -336,7 +342,11 @@ public class UsersController {
             if (raw instanceof Number) {
                 statusInt = ((Number) raw).intValue();
             } else if (raw instanceof String) {
-                try { statusInt = Integer.parseInt((String) raw); } catch (NumberFormatException e) { statusInt = null; }
+                try {
+                    statusInt = Integer.parseInt((String) raw);
+                } catch (NumberFormatException e) {
+                    statusInt = null;
+                }
             }
 
             if (statusInt == null || (statusInt != 1 && statusInt != 2)) {
@@ -365,12 +375,13 @@ public class UsersController {
      * 更新使用者基本資料（僅更新姓名、信箱、電話、地址）- 使用 JDBC
      * body 範例資料:
      * {
-     *     "name": "王小明",
-     *     "email": "wang@example.com",
-     *     "phoneNumber": "0923456789",
-     *     "mailingAddress": "台北市中正區重慶南路一段100號"
+     * "name": "王小明",
+     * "email": "wang@example.com",
+     * "phoneNumber": "0923456789",
+     * "mailingAddress": "台北市中正區重慶南路一段100號"
      * }
-     * @param id 使用者ID
+     * 
+     * @param id      使用者ID
      * @param request 包含要更新的欄位
      * @return 更新後的使用者資料
      */
@@ -391,13 +402,17 @@ public class UsersController {
 
             // 準備要更新的欄位（只更新有提供的欄位）
             String name = request.containsKey("name") && request.get("name") != null
-                    ? request.get("name").trim() : null;
+                    ? request.get("name").trim()
+                    : null;
             String email = request.containsKey("email") && request.get("email") != null
-                    ? request.get("email").trim() : null;
+                    ? request.get("email").trim()
+                    : null;
             String phoneNumber = request.containsKey("phoneNumber") && request.get("phoneNumber") != null
-                    ? request.get("phoneNumber").trim() : null;
+                    ? request.get("phoneNumber").trim()
+                    : null;
             String mailingAddress = request.containsKey("mailingAddress") && request.get("mailingAddress") != null
-                    ? request.get("mailingAddress").trim() : null;
+                    ? request.get("mailingAddress").trim()
+                    : null;
 
             // 使用 JDBC 方式更新
             int rowsUpdated = usersService.updateUserProfile(id, name, email, phoneNumber, mailingAddress);
@@ -425,27 +440,29 @@ public class UsersController {
             return ResponseEntity.status(500).body(result);
         }
     }
+
     /**
      * POST /users/new-member
      * 註冊新使用者
      * body 範例資料:
      * {
-     *"account": "inst001",
-     *"password": "$2a$10$xYzHashedPasswordExample2234567890",
-     *"accountStatus": 1,
-     *"permissionType": 1,
-     *"name": "王小明",
-     *"gender": true,
-     *"phoneNumber": "0923456789",
-     *"mailingAddress": "台北市中正區重慶南路一段100號",
-     *"email": "wang@institution.com",
-     *"birthDate": "1985-03-20",
-     *"familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
-     *"institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
-     *"nationalID": "B234567890"
-     }
-     *     @param user 使用者資料
-     *     @return 註冊結果
+     * "account": "inst001",
+     * "password": "$2a$10$xYzHashedPasswordExample2234567890",
+     * "accountStatus": 1,
+     * "permissionType": 1,
+     * "name": "王小明",
+     * "gender": true,
+     * "phoneNumber": "0923456789",
+     * "mailingAddress": "台北市中正區重慶南路一段100號",
+     * "email": "wang@institution.com",
+     * "birthDate": "1985-03-20",
+     * "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
+     * "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
+     * "nationalID": "B234567890"
+     * }
+     * 
+     * @param user 使用者資料
+     * @return 註冊結果
      */
     @PostMapping("/new-member")
     public ResponseEntity<Map<String, Object>> createOrUpdateUserJdbc(@RequestBody Users user) {
@@ -561,20 +578,20 @@ public class UsersController {
      *
      * 範例資料:
      * {
-     *     "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *     "accountStatus": 1,
-     *     "permissionType": 3,
-     *     "name": "王小明",
-     *     "gender": true,
-     *     "phoneNumber": "0923456789",
-     *     "mailingAddress": "台北市中正區重慶南路一段100號",
-     *     "email": "wang@institution.com",
-     *     "birthDate": "1985-03-20",
-     *     "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
-     *     "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
-     *     "nationalID": "B234567890",
-     *     "Parents": [...],
-     *     "Children": [...]
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "accountStatus": 1,
+     * "permissionType": 3,
+     * "name": "王小明",
+     * "gender": true,
+     * "phoneNumber": "0923456789",
+     * "mailingAddress": "台北市中正區重慶南路一段100號",
+     * "email": "wang@institution.com",
+     * "birthDate": "1985-03-20",
+     * "familyInfoID": "6659e1bc-a2ea-4bd2-854f-4141ba6ad924",
+     * "institutionID": "e09f1689-17a4-46f7-ae95-160a368147af",
+     * "nationalID": "B234567890",
+     * "Parents": [...],
+     * "Children": [...]
      * }
      *
      * @param userID 使用者 ID
@@ -618,14 +635,16 @@ public class UsersController {
      * 修改使用者密碼
      * body 範例資料:
      * {
-     *     "newPassword": "newPassword123"
+     * "newPassword": "newPassword123"
      * }
-     * @param id 使用者ID
+     * 
+     * @param id      使用者ID
      * @param request 包含新密碼的請求
      * @return 修改結果
      */
     @PutMapping("/{id}/password")
-    public ResponseEntity<Map<String, Object>> changePassword(@PathVariable UUID id, @RequestBody Map<String, String> request) {
+    public ResponseEntity<Map<String, Object>> changePassword(@PathVariable UUID id,
+            @RequestBody Map<String, String> request) {
         Map<String, Object> result = new HashMap<>();
 
         try {
@@ -650,7 +669,9 @@ public class UsersController {
             if (userOpt.isEmpty()) {
                 result.put("success", false);
                 result.put("message", "使用者不存在");
-                return ResponseEntity.notFound().build();
+                result.put("success", false);
+                result.put("message", "使用者不存在");
+                return ResponseEntity.status(404).body(result);
             }
 
             Users user = userOpt.get();
@@ -681,31 +702,31 @@ public class UsersController {
     }
 
     /**
-     * GET  /users/search
+     * GET /users/search
      * 模糊查詢使用者，支援分頁
      * 範例資料:
      * {
-     *     "offset": 0,
-     *     "size": 10,
-     *     "totalPages": 1,
-     *     "hasNext": false,
-     *     "searchTerm": "王",
-     *     "content": [
-     *         {
-     *             "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
-     *             "account": "wang001",
-     *             "institutionName": "小天使托嬰中心",
-     *             "permissionType": 2,
-     *             "accountStatus": 1
-     *         }
-     *     ],
-     *     "totalElements": 1
+     * "offset": 0,
+     * "size": 10,
+     * "totalPages": 1,
+     * "hasNext": false,
+     * "searchTerm": "王",
+     * "content": [
+     * {
+     * "userID": "86c23732-ce0d-4ec7-93d5-048faee27d4b",
+     * "account": "wang001",
+     * "institutionName": "小天使托嬰中心",
+     * "permissionType": 2,
+     * "accountStatus": 1
+     * }
+     * ],
+     * "totalElements": 1
      * }
      * 搜尋使用者（帳號、姓名、信箱、機構名稱）
      *
      * @param searchTerm 搜尋關鍵字
-     * @param offset 起始位置
-     * @param size   頁面大小
+     * @param offset     起始位置
+     * @param size       頁面大小
      * @return 搜尋結果及分頁資訊
      **/
     @GetMapping("/search")
@@ -719,7 +740,8 @@ public class UsersController {
             }
 
             final int MAX_SIZE = 100;
-            if (size > MAX_SIZE) size = MAX_SIZE;
+            if (size > MAX_SIZE)
+                size = MAX_SIZE;
 
             // 如果搜尋關鍵字為空或null，返回一般分頁結果
             List<UserSummaryDTO> users;

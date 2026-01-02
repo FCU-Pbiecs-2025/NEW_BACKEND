@@ -150,7 +150,7 @@ class FileServiceTest {
 
         Path path = fileService.getFolderPath(applicationId);
 
-        assertEquals(tempDir, path);
+        assertEquals(tempDir.resolve(applicationId.toString()), path);
     }
 
     // ========== saveInstitutionImage() 測試 ==========

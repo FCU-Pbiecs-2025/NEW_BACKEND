@@ -140,7 +140,6 @@
                 <configuration>
                     <source>23</source>
                     <target>23</target>
-                    <enablePreview>true</enablePreview>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -206,17 +205,33 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-pmd-plugin</artifactId>
-                <version>3.25.0</version>
+                <version>3.26.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-java</artifactId>
+                        <version>7.9.0</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-core</artifactId>
+                        <version>7.9.0</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.ow2.asm</groupId>
+                        <artifactId>asm</artifactId>
+                        <version>9.7.1</version>
+                    </dependency>
+                </dependencies>
                 <configuration>
+                    <skip>false</skip>
                     <rulesets>
                         <ruleset>${project.basedir}/config/pmd/ruleset.xml</ruleset>
                     </rulesets>
                     <printFailingErrors>true</printFailingErrors>
                     <failOnViolation>false</failOnViolation>
-
-                    <!-- Important: avoid bytecode/type-resolution on Java 23 (classfile major 67) -->
                     <analysisCache>false</analysisCache>
-                    <noCache>true</noCache>
+                    <targetJdk>${java.version}</targetJdk>
                 </configuration>
                 <executions>
                     <execution>

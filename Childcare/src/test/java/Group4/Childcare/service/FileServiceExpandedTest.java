@@ -160,7 +160,7 @@ class FileServiceExpandedTest {
         Path result = fileService.getFolderPath(testApplicationId);
 
         assertNotNull(result);
-        assertEquals(tempDir, result);
+        assertEquals(tempDir.resolve(testApplicationId.toString()), result);
     }
 
     // ========== saveInstitutionImage Tests ==========
