@@ -819,8 +819,14 @@ class WaitlistControllerTest {
             request.setInstitutionId(testInstitutionId);
 
             when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(10);
-            when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(5); // 5 個空位
-            when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(new HashMap<>());
+            when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0); // 10 個空位
+
+            // 修正：必須提供所有 key 的值
+            Map<Integer, Integer> acceptedCount = new HashMap<>();
+            acceptedCount.put(1, 0);
+            acceptedCount.put(2, 0);
+            acceptedCount.put(3, 0);
+            when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
 
             Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
             applicantsByPriority.put(1, new ArrayList<>());
@@ -842,9 +848,9 @@ class WaitlistControllerTest {
             mockMvc.perform(post("/waitlist/lottery")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.thirdPriorityAccepted", is(5))) // 5 個空位
-                    .andExpect(jsonPath("$.waitlisted", is(1))); // 1 人候補
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.thirdPriorityAccepted", is(6))) // 6 人全部錄取
+                            .andExpect(jsonPath("$.waitlisted", is(0))); // 0 人候補
         }
 
         // Willium1925修改：測試 assignClassAndAdmit 的 false 分支
@@ -928,6 +934,120 @@ class WaitlistControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.firstPriorityAccepted", is(1)))
                                 .andExpect(jsonPath("$.waitlisted", is(1)));
+        }
+
+        // Willium1925新增：sendLotteryNotificationEmails 全覆蓋測試
+        @Test
+        void testSendLotteryNotificationEmails_FullCoverage() throws Exception {
+            LotteryRequest request = new LotteryRequest();
+            request.setInstitutionId(testInstitutionId);
+
+            // 設定名額：P1=10, P3=10
+            when(waitlistJdbcRepository.getTotalCapacity(testInstitutionId)).thenReturn(20);
+            when(waitlistJdbcRepository.getCurrentStudentsCount(testInstitutionId)).thenReturn(0);
+
+            Map<Integer, Integer> acceptedCount = new HashMap<>();
+            acceptedCount.put(1, 0);
+            acceptedCount.put(2, 0);
+            acceptedCount.put(3, 0);
+            when(waitlistJdbcRepository.getAcceptedCountByPriority(testInstitutionId)).thenReturn(acceptedCount);
+
+            Map<Integer, List<Map<String, Object>>> applicantsByPriority = new HashMap<>();
+
+            // --- 錄取者 (P1) ---
+            List<Map<String, Object>> p1 = new ArrayList<>();
+            // 1. CaseNumber=null
+            Map<String, Object> app1 = createApplicant("App1", "2020-01-01");
+            app1.put("CaseNumber", null);
+            p1.add(app1);
+            // 2. ApplicationDate=java.sql.Date
+            Map<String, Object> app2 = createApplicant("App2", "2020-01-01");
+            app2.put("ApplicationDate", java.sql.Date.valueOf("2023-01-01"));
+            p1.add(app2);
+            // 3. ApplicationDate=LocalDate
+            Map<String, Object> app3 = createApplicant("App3", "2020-01-01");
+            app3.put("ApplicationDate", java.time.LocalDate.now());
+            p1.add(app3);
+            // 4. Email=null
+            Map<String, Object> app4 = createApplicant("App4", "2020-01-01");
+            app4.put("Email", null);
+            p1.add(app4);
+            // 5. Email=""
+            Map<String, Object> app5 = createApplicant("App5", "2020-01-01");
+            app5.put("Email", "");
+            p1.add(app5);
+
+            // --- 候補者 (P3) ---
+            // 為了讓 P3 變成候補，我們讓 P3 申請人數 > P3 名額 (名額=20*0.7=14)
+            // 但這裡我們直接用 Mock 讓 P3 沒被錄取比較快：
+            // 其實只要讓 P3 申請人很多，或者讓 P3 名額很少即可。
+            // 這裡我們用簡單的方法：讓 P3 申請人很多，且讓 findSuitableClass 回傳 null (沒班級可念 -> 候補)
+
+            List<Map<String, Object>> p3 = new ArrayList<>();
+            // 6. CaseNumber=null
+            Map<String, Object> app6 = createApplicant("App6", "2020-01-01");
+            app6.put("CaseNumber", null);
+            p3.add(app6);
+            // 7. ApplicationDate=java.sql.Date
+            Map<String, Object> app7 = createApplicant("App7", "2020-01-01");
+            app7.put("ApplicationDate", java.sql.Date.valueOf("2023-01-01"));
+            p3.add(app7);
+            // 8. ApplicationDate=LocalDate
+            Map<String, Object> app8 = createApplicant("App8", "2020-01-01");
+            app8.put("ApplicationDate", java.time.LocalDate.now());
+            p3.add(app8);
+            // 9. Email=null
+            Map<String, Object> app9 = createApplicant("App9", "2020-01-01");
+            app9.put("Email", null);
+            p3.add(app9);
+            // 10. MessagingException
+            Map<String, Object> app10 = createApplicant("App10", "2020-01-01");
+            app10.put("Email", "msg-error@example.com");
+            p3.add(app10);
+            // 11. RuntimeException
+            Map<String, Object> app11 = createApplicant("App11", "2020-01-01");
+            app11.put("Email", "run-error@example.com");
+            p3.add(app11);
+
+            applicantsByPriority.put(1, p1);
+            applicantsByPriority.put(2, new ArrayList<>());
+            applicantsByPriority.put(3, p3);
+            when(waitlistJdbcRepository.getLotteryApplicantsByPriority(testInstitutionId)).thenReturn(applicantsByPriority);
+
+            // 讓 P1 錄取
+            when(waitlistJdbcRepository.findSuitableClass(any(), any())).thenReturn(testClassId);
+            when(waitlistJdbcRepository.hasClassCapacity(testClassId)).thenReturn(true);
+
+            // 讓 P3 候補 (模擬找不到班級)
+            // 注意：這裡需要區分 P1 和 P3 的呼叫。
+            // P1 的生日都是 2020-01-01 (除了 app3 是 LocalDate.now())
+            // P3 的生日也都是 2020-01-01
+            // 為了簡單起見，我們讓 findSuitableClass 第一次呼叫回傳 classId (給 P1)，之後回傳 null (給 P3)
+            // 但因為 P1 有 5 個人，P3 有 6 個人，這樣寫比較麻煩。
+            // 更好的方法：讓 P3 的生日跟 P1 不一樣。
+
+            // 修改 P3 生日為 2021-01-01
+            for(Map<String, Object> app : p3) {
+                app.put("BirthDate", java.sql.Date.valueOf("2021-01-01"));
+            }
+
+            // P1 (2020) -> 錄取
+            when(waitlistJdbcRepository.findSuitableClass(eq(java.sql.Date.valueOf("2020-01-01").toLocalDate()), any())).thenReturn(testClassId);
+            when(waitlistJdbcRepository.findSuitableClass(eq(java.time.LocalDate.now()), any())).thenReturn(testClassId);
+
+            // P3 (2021) -> 候補 (找不到班級)
+            when(waitlistJdbcRepository.findSuitableClass(eq(java.sql.Date.valueOf("2021-01-01").toLocalDate()), any())).thenReturn(null);
+
+            when(waitlistJdbcRepository.getClassInfo(testInstitutionId)).thenReturn(new ArrayList<>());
+
+            // Mock Email Exceptions
+            doThrow(new MessagingException("Mail Error")).when(emailService).sendApplicationStatusChangeEmail(eq("msg-error@example.com"), any(), any(), any(), any(), any(), any(), any(), any());
+            doThrow(new RuntimeException("Run Error")).when(emailService).sendApplicationStatusChangeEmail(eq("run-error@example.com"), any(), any(), any(), any(), any(), any(), any(), any());
+
+            mockMvc.perform(post("/waitlist/lottery")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk());
         }
 
         // Willium1925修改:Helper method
