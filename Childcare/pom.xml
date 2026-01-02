@@ -31,6 +31,7 @@
         <jacoco.version>0.8.12</jacoco.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- CK artifact not resolvable in current environment; compute WMC via script instead -->
     </properties>
     <dependencies>
         <dependency>
@@ -200,6 +201,36 @@
                     </excludes>
                 </configuration>
             </plugin>
+
+            <!-- Static analysis: PMD report (HTML) + PMD XML (for scripts) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>3.25.0</version>
+                <configuration>
+                    <rulesets>
+                        <ruleset>${project.basedir}/config/pmd/ruleset.xml</ruleset>
+                    </rulesets>
+                    <printFailingErrors>true</printFailingErrors>
+                    <failOnViolation>false</failOnViolation>
+
+                    <!-- Important: avoid bytecode/type-resolution on Java 23 (classfile major 67) -->
+                    <analysisCache>false</analysisCache>
+                    <noCache>true</noCache>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>pmd</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>pmd</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Removed CK exec integration (artifact not found); see scripts/compute-wmc.ps1 -->
+
         </plugins>
     </build>
 
