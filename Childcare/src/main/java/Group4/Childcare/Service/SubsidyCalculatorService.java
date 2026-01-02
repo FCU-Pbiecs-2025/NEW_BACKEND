@@ -1,4 +1,4 @@
-package Group4.Childcare.service;
+package Group4.Childcare.Service;
 
 import org.springframework.stereotype.Service;
 
