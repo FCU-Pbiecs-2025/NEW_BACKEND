@@ -270,6 +270,13 @@ class ClassesServiceExpandedTest {
     // ========== searchInstitutionsWithClassesByName Tests ==========
 
     @Test
+    void testSearchInstitutionsWithClassesByName_Empty() {
+        when(repository.findInstitutionsWithClassesByName("test")).thenReturn(new ArrayList<>());
+        List<Map<String, Object>> result = service.searchInstitutionsWithClassesByName("test");
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
     void testSearchInstitutionsWithClassesByName_Success() {
         List<Map<String, Object>> rawResults = new ArrayList<>();
         Map<String, Object> row = new HashMap<>();
@@ -289,7 +296,57 @@ class ClassesServiceExpandedTest {
         List<Map<String, Object>> result = service.searchInstitutionsWithClassesByName("測試");
 
         assertNotNull(result);
+        assertEquals(1, result.size());
         verify(repository).findInstitutionsWithClassesByName("測試");
+    }
+
+    @Test
+    void testSearchInstitutionsWithClassesByName_MultipleClassesSameInstitution() {
+        List<Map<String, Object>> rawResults = new ArrayList<>();
+        Map<String, Object> institution = new HashMap<>();
+        institution.put("institutionID", "inst-1");
+
+        Map<String, Object> row1 = new HashMap<>();
+        row1.put("institution", institution);
+        Map<String, Object> class1 = new HashMap<>();
+        class1.put("classID", "c1");
+        row1.put("class", class1);
+
+        Map<String, Object> row2 = new HashMap<>();
+        row2.put("institution", institution);
+        Map<String, Object> class2 = new HashMap<>();
+        class2.put("classID", "c2");
+        row2.put("class", class2);
+
+        rawResults.add(row1);
+        rawResults.add(row2);
+        when(repository.findInstitutionsWithClassesByName("test")).thenReturn(rawResults);
+
+        List<Map<String, Object>> result = service.searchInstitutionsWithClassesByName("test");
+
+        assertEquals(1, result.size());
+        List<Map<String, Object>> classes = (List<Map<String, Object>>) result.get(0).get("classes");
+        assertEquals(2, classes.size());
+    }
+
+    @Test
+    void testSearchInstitutionsWithClassesByName_NoClassData() {
+        List<Map<String, Object>> rawResults = new ArrayList<>();
+        Map<String, Object> institution = new HashMap<>();
+        institution.put("institutionID", "inst-1");
+
+        Map<String, Object> row = new HashMap<>();
+        row.put("institution", institution);
+        row.put("class", null);
+
+        rawResults.add(row);
+        when(repository.findInstitutionsWithClassesByName("test")).thenReturn(rawResults);
+
+        List<Map<String, Object>> result = service.searchInstitutionsWithClassesByName("test");
+
+        assertEquals(1, result.size());
+        List<Map<String, Object>> classes = (List<Map<String, Object>>) result.get(0).get("classes");
+        assertTrue(classes.isEmpty());
     }
 
     // ========== searchClassesByInstitutionName Tests ==========

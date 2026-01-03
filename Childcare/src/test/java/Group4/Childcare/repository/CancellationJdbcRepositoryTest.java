@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -220,6 +222,145 @@ class CancellationJdbcRepositoryTest {
 
         // When
         cancellationRepository.deleteById(testCancellationId);
+
+        // Then
+        verify(jdbcTemplate, times(1)).update(anyString(), eq(testCancellationId.toString()));
+    }
+
+    // ==================== RowMapper Tests ====================
+
+    @Test
+    void testRowMapper_FullData() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("CancellationID")).thenReturn(testCancellationId.toString());
+        when(rs.getString("ApplicationID")).thenReturn(testApplicationId.toString());
+        when(rs.getString("AbandonReason")).thenReturn("家長主動取消");
+        when(rs.getDate("CancellationDate")).thenReturn(java.sql.Date.valueOf(LocalDate.of(2024, 1, 1)));
+        when(rs.getDate("ConfirmDate")).thenReturn(java.sql.Date.valueOf(LocalDate.of(2024, 1, 2)));
+
+        final RowMapper<Cancellation>[] capturedMapper = new RowMapper[1];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+            capturedMapper[0] = invocation.getArgument(1);
+            return Collections.emptyList();
+        });
+
+        cancellationRepository.findAll();
+        assertNotNull(capturedMapper[0]);
+
+        // When
+        Cancellation result = capturedMapper[0].mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(testCancellationId, result.getCancellationID());
+        assertEquals(testApplicationId, result.getApplicationID());
+        assertEquals("家長主動取消", result.getAbandonReason());
+        assertEquals(LocalDate.of(2024, 1, 1), result.getCancellationDate());
+        assertEquals(LocalDate.of(2024, 1, 2), result.getConfirmDate());
+    }
+
+    @Test
+    void testRowMapper_NullOptionalFields() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("CancellationID")).thenReturn(testCancellationId.toString());
+        when(rs.getString("ApplicationID")).thenReturn(null);
+        when(rs.getString("AbandonReason")).thenReturn("無原因");
+        when(rs.getDate("CancellationDate")).thenReturn(null);
+        when(rs.getDate("ConfirmDate")).thenReturn(null);
+
+        final RowMapper<Cancellation>[] capturedMapper = new RowMapper[1];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+            capturedMapper[0] = invocation.getArgument(1);
+            return Collections.emptyList();
+        });
+
+        cancellationRepository.findAll();
+
+        // When
+        Cancellation result = capturedMapper[0].mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getApplicationID());
+        assertNull(result.getCancellationDate());
+        assertNull(result.getConfirmDate());
+    }
+
+    // ==================== Additional Branch Tests ====================
+
+    @Test
+    void testSave_NullApplicationId_Success() {
+        // Given
+        Cancellation cancellation = createTestCancellation();
+        cancellation.setCancellationID(null);
+        cancellation.setApplicationID(null);
+
+        when(jdbcTemplate.update(anyString(), anyString(), isNull(), anyString(),
+                any(), any()))
+            .thenReturn(1);
+
+        // When
+        Cancellation result = cancellationRepository.save(cancellation);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getApplicationID());
+    }
+
+    @Test
+    void testUpdate_NullApplicationId_Success() {
+        // Given
+        Cancellation cancellation = createTestCancellation();
+        cancellation.setCancellationID(testCancellationId);
+        cancellation.setApplicationID(null);
+
+        when(jdbcTemplate.update(anyString(), isNull(), anyString(),
+                any(), any(), anyString()))
+            .thenReturn(1);
+
+        // When
+        Cancellation result = cancellationRepository.save(cancellation);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getApplicationID());
+    }
+
+    @Test
+    void testCount_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
+            .thenReturn(null);
+
+        // When
+        long count = cancellationRepository.count();
+
+        // Then
+        assertEquals(0L, count);
+    }
+
+    @Test
+    void testExistsById_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString()))
+            .thenReturn(null);
+
+        // When
+        boolean exists = cancellationRepository.existsById(testCancellationId);
+
+        // Then
+        assertFalse(exists);
+    }
+
+    @Test
+    void testDelete_Entity_Success() {
+        // Given
+        Cancellation cancellation = createTestCancellation();
+
+        // When
+        cancellationRepository.delete(cancellation);
 
         // Then
         verify(jdbcTemplate, times(1)).update(anyString(), eq(testCancellationId.toString()));

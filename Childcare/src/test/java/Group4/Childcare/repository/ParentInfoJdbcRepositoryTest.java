@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -79,6 +81,46 @@ class ParentInfoJdbcRepositoryTest {
         // Then
         assertNotNull(result);
         assertEquals(testParentId, result.getParentID());
+    }
+
+    @Test
+    void testSave_NewParentInfo_NullFamilyInfoId_Success() {
+        // Given
+        ParentInfo parentInfo = createTestParentInfo();
+        parentInfo.setParentID(null);
+        parentInfo.setFamilyInfoID(null);
+
+        when(jdbcTemplate.update(anyString(), any(), anyString(), anyString(), anyBoolean(),
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                any(), anyBoolean(), any(), isNull()))
+            .thenReturn(1);
+
+        // When
+        ParentInfo result = parentInfoRepository.save(parentInfo);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getFamilyInfoID());
+    }
+
+    @Test
+    void testSave_ExistingParentInfo_NullFamilyInfoId_Success() {
+        // Given
+        ParentInfo parentInfo = createTestParentInfo();
+        parentInfo.setParentID(testParentId);
+        parentInfo.setFamilyInfoID(null);
+
+        when(jdbcTemplate.update(anyString(), anyString(), anyString(), anyBoolean(),
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                any(), anyBoolean(), any(), isNull(), anyString()))
+            .thenReturn(1);
+
+        // When
+        ParentInfo result = parentInfoRepository.save(parentInfo);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getFamilyInfoID());
     }
 
     // ==================== findById Tests ====================
@@ -183,6 +225,19 @@ class ParentInfoJdbcRepositoryTest {
         assertEquals(0L, count);
     }
 
+    @Test
+    void testCount_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
+            .thenReturn(null);
+
+        // When
+        long count = parentInfoRepository.count();
+
+        // Then
+        assertEquals(0L, count);
+    }
+
     // ==================== existsById Tests ====================
 
     @Test
@@ -211,6 +266,19 @@ class ParentInfoJdbcRepositoryTest {
         assertFalse(exists);
     }
 
+    @Test
+    void testExistsById_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testParentId.toString())))
+            .thenReturn(null);
+
+        // When
+        boolean exists = parentInfoRepository.existsById(testParentId);
+
+        // Then
+        assertFalse(exists);
+    }
+
     // ==================== deleteById Tests ====================
 
     @Test
@@ -224,6 +292,117 @@ class ParentInfoJdbcRepositoryTest {
 
         // Then
         verify(jdbcTemplate, times(1)).update(anyString(), eq(testParentId.toString()));
+    }
+
+    // ==================== RowMapper Tests ====================
+
+    @Test
+    void testRowMapper_FullData() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("ParentID")).thenReturn(testParentId.toString());
+        when(rs.getString("NationalID")).thenReturn("A123456789");
+        when(rs.getString("Name")).thenReturn("王大明");
+        when(rs.getBoolean("Gender")).thenReturn(true);
+        when(rs.getString("Relationship")).thenReturn("父親");
+        when(rs.getString("Occupation")).thenReturn("工程師");
+        when(rs.getString("PhoneNumber")).thenReturn("0912345678");
+        when(rs.getString("HouseholdAddress")).thenReturn("台北市");
+        when(rs.getString("MailingAddress")).thenReturn("台北市");
+        when(rs.getString("Email")).thenReturn("test@test.com");
+        when(rs.getDate("BirthDate")).thenReturn(java.sql.Date.valueOf(LocalDate.of(1980, 1, 1)));
+        when(rs.getBoolean("IsSuspended")).thenReturn(true);
+        when(rs.getDate("SuspendEnd")).thenReturn(java.sql.Date.valueOf(LocalDate.of(2025, 12, 31)));
+        when(rs.getString("FamilyInfoID")).thenReturn(testFamilyInfoId.toString());
+
+        // 獲取私有的 PARENT_INFO_ROW_MAPPER
+        // 由於它是私有的，我們透過呼叫 findAll() 並攔截傳遞給 jdbcTemplate 的 RowMapper 來測試它
+        final RowMapper<ParentInfo>[] capturedMapper = new RowMapper[1];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+            capturedMapper[0] = invocation.getArgument(1);
+            return Collections.emptyList();
+        });
+
+        parentInfoRepository.findAll();
+        assertNotNull(capturedMapper[0]);
+
+        // When
+        ParentInfo result = capturedMapper[0].mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(testParentId, result.getParentID());
+        assertEquals("王大明", result.getName());
+        assertEquals(LocalDate.of(1980, 1, 1), result.getBirthDate());
+        assertTrue(result.getIsSuspended());
+        assertEquals(LocalDate.of(2025, 12, 31), result.getSuspendEnd());
+        assertEquals(testFamilyInfoId, result.getFamilyInfoID());
+    }
+
+    @Test
+    void testRowMapper_NullOptionalFields() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("ParentID")).thenReturn(testParentId.toString());
+        when(rs.getString("NationalID")).thenReturn("A123456789");
+        when(rs.getString("Name")).thenReturn("王大明");
+        when(rs.getBoolean("Gender")).thenReturn(true);
+        when(rs.getString("Relationship")).thenReturn("父親");
+        when(rs.getString("Occupation")).thenReturn("工程師");
+        when(rs.getString("PhoneNumber")).thenReturn("0912345678");
+        when(rs.getString("HouseholdAddress")).thenReturn("台北市");
+        when(rs.getString("MailingAddress")).thenReturn("台北市");
+        when(rs.getString("Email")).thenReturn("test@test.com");
+        
+        // 測試 null 分支
+        when(rs.getDate("BirthDate")).thenReturn(null);
+        when(rs.getBoolean("IsSuspended")).thenReturn(false);
+        when(rs.getDate("SuspendEnd")).thenReturn(null);
+        when(rs.getString("FamilyInfoID")).thenReturn(null);
+
+        final RowMapper<ParentInfo>[] capturedMapper = new RowMapper[1];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+            capturedMapper[0] = invocation.getArgument(1);
+            return Collections.emptyList();
+        });
+
+        parentInfoRepository.findAll();
+        
+        // When
+        ParentInfo result = capturedMapper[0].mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getBirthDate());
+        assertFalse(result.getIsSuspended());
+        assertNull(result.getSuspendEnd());
+        assertNull(result.getFamilyInfoID());
+    }
+
+    @Test
+    void testDelete_Entity_Success() {
+        // Given
+        ParentInfo parentInfo = createTestParentInfo();
+        
+        // When
+        parentInfoRepository.delete(parentInfo);
+
+        // Then
+        verify(jdbcTemplate, times(1)).update(anyString(), eq(testParentId.toString()));
+    }
+
+    @Test
+    void testFindByFamilyInfoID_Success() {
+        // Given
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(testFamilyInfoId.toString())))
+            .thenReturn(Collections.singletonList(createTestParentInfo()));
+
+        // When
+        List<ParentInfo> result = parentInfoRepository.findByFamilyInfoID(testFamilyInfoId);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(1, result.size());
     }
 
     // ==================== Helper Methods ====================

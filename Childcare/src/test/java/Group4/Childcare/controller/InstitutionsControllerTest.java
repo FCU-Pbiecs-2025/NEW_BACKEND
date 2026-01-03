@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -45,6 +46,9 @@ class InstitutionsControllerTest {
 
     @Mock
     private InstitutionsService service;
+
+    @Mock
+    private ObjectMapper mockObjectMapper;
 
     @InjectMocks
     private InstitutionsController controller;
@@ -328,5 +332,363 @@ class InstitutionsControllerTest {
                 .andExpect(jsonPath("$[0].institutionName", is("測試托育機構")));
 
         verify(service, times(1)).getAllSimple();
+    }
+
+    // ===== createWithImage 測試 =====
+    @Test
+    void testCreateWithImage_WithImage() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "test.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "test image content".getBytes()
+        );
+
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                objectMapper.writeValueAsString(testInstitution).getBytes()
+        );
+
+        when(service.createWithImage(any(Institutions.class), any())).thenReturn(testInstitution);
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions")
+                .file(data)
+                .file(image)
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.institutionName", is("測試托育機構")));
+
+        verify(service, times(1)).createWithImage(any(Institutions.class), any());
+    }
+
+    @Test
+    void testCreateWithImage_WithoutImage() throws Exception {
+        // Given
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                objectMapper.writeValueAsString(testInstitution).getBytes()
+        );
+
+        when(service.create(any(Institutions.class))).thenReturn(testInstitution);
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions")
+                .file(data)
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.institutionName", is("測試托育機構")));
+
+        verify(service, times(1)).create(any(Institutions.class));
+    }
+
+    @Test
+    void testCreateWithImage_IllegalArgumentException() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "test.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "test image content".getBytes()
+        );
+
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                objectMapper.writeValueAsString(testInstitution).getBytes()
+        );
+
+        when(service.createWithImage(any(Institutions.class), any()))
+                .thenThrow(new IllegalArgumentException("無效的圖片格式"));
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions")
+                .file(data)
+                .file(image)
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testCreateWithImage_Exception() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "test.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "test image content".getBytes()
+        );
+
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                objectMapper.writeValueAsString(testInstitution).getBytes()
+        );
+
+        when(service.createWithImage(any(Institutions.class), any()))
+                .thenThrow(new RuntimeException("建立失敗"));
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions")
+                .file(data)
+                .file(image)
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void testCreateWithImage_EmptyImageFile() throws Exception {
+        // Given - 測試空圖片文件的情況（image != null 但 isEmpty() = true）
+        MockMultipartFile emptyImage = new MockMultipartFile(
+                "image",
+                "test.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                new byte[0]  // 空內容
+        );
+
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                objectMapper.writeValueAsString(testInstitution).getBytes()
+        );
+
+        when(service.create(any(Institutions.class))).thenReturn(testInstitution);
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions")
+                .file(data)
+                .file(emptyImage)
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.institutionName", is("測試托育機構")));
+
+        verify(service, times(1)).create(any(Institutions.class));
+        verify(service, never()).createWithImage(any(), any());
+    }
+
+    // ===== update exception 測試 =====
+    @Test
+    void testUpdate_Exception() throws Exception {
+        // Given
+        when(service.update(eq(testInstitutionId), any(Institutions.class)))
+                .thenThrow(new RuntimeException("更新失敗"));
+
+        // When & Then
+        mockMvc.perform(put("/institutions/{id}", testInstitutionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testInstitution)))
+                .andExpect(status().isInternalServerError());
+    }
+
+    // ===== updateWithImage 測試 =====
+    @Test
+    void testUpdateWithImage_WithImage() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "updated.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "updated image content".getBytes()
+        );
+
+        String jsonData = objectMapper.writeValueAsString(testInstitution);
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                jsonData.getBytes()
+        );
+
+        when(service.getById(testInstitutionId)).thenReturn(Optional.of(testInstitution));
+        when(mockObjectMapper.readValue(eq(jsonData), eq(Institutions.class))).thenReturn(testInstitution);
+        when(service.updateWithImage(eq(testInstitutionId), any(Institutions.class), any()))
+                .thenReturn(testInstitution);
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .file(data)
+                .file(image)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.institutionName", is("測試托育機構")));
+
+        verify(service, times(1)).updateWithImage(eq(testInstitutionId), any(Institutions.class), any());
+    }
+
+    @Test
+    void testUpdateWithImage_WithoutImage() throws Exception {
+        // Given
+        String jsonData = objectMapper.writeValueAsString(testInstitution);
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                jsonData.getBytes()
+        );
+
+        when(service.getById(testInstitutionId)).thenReturn(Optional.of(testInstitution));
+        when(mockObjectMapper.readValue(eq(jsonData), eq(Institutions.class))).thenReturn(testInstitution);
+        when(service.update(eq(testInstitutionId), any(Institutions.class)))
+                .thenReturn(testInstitution);
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .file(data)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.institutionName", is("測試托育機構")));
+
+        verify(service, times(1)).update(eq(testInstitutionId), any(Institutions.class));
+    }
+
+    @Test
+    void testUpdateWithImage_NotFound() throws Exception {
+        // Given
+        String jsonData = objectMapper.writeValueAsString(testInstitution);
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                jsonData.getBytes()
+        );
+
+        when(service.getById(testInstitutionId)).thenReturn(Optional.empty());
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .file(data)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testUpdateWithImage_WithoutData() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "updated.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "updated image content".getBytes()
+        );
+
+        when(service.getById(testInstitutionId)).thenReturn(Optional.of(testInstitution));
+        when(service.updateWithImage(eq(testInstitutionId), any(Institutions.class), any()))
+                .thenReturn(testInstitution);
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .file(image)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isOk());
+
+        verify(service, times(1)).updateWithImage(eq(testInstitutionId), any(Institutions.class), any());
+    }
+
+    @Test
+    void testUpdateWithImage_NoDataNoImage() throws Exception {
+        // Given
+        when(service.getById(testInstitutionId)).thenReturn(Optional.of(testInstitution));
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testUpdateWithImage_IllegalArgumentException() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "updated.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "updated image content".getBytes()
+        );
+
+        String jsonData = objectMapper.writeValueAsString(testInstitution);
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                jsonData.getBytes()
+        );
+
+        when(service.getById(testInstitutionId)).thenReturn(Optional.of(testInstitution));
+        when(mockObjectMapper.readValue(eq(jsonData), eq(Institutions.class))).thenReturn(testInstitution);
+        when(service.updateWithImage(eq(testInstitutionId), any(Institutions.class), any()))
+                .thenThrow(new IllegalArgumentException("無效的圖片格式"));
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .file(data)
+                .file(image)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testUpdateWithImage_Exception() throws Exception {
+        // Given
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "updated.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "updated image content".getBytes()
+        );
+
+        String jsonData = objectMapper.writeValueAsString(testInstitution);
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                jsonData.getBytes()
+        );
+
+        when(service.getById(testInstitutionId)).thenReturn(Optional.of(testInstitution));
+        when(mockObjectMapper.readValue(eq(jsonData), eq(Institutions.class)))
+                .thenThrow(new RuntimeException("JSON解析失敗"));
+
+        // When & Then
+        mockMvc.perform(multipart("/institutions/{id}", testInstitutionId)
+                .file(data)
+                .file(image)
+                .with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                })
+                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isInternalServerError());
     }
 }

@@ -90,29 +90,38 @@ public class ApplicationsJdbcRepositoryExhaustiveTest {
                 row.put("ParticipantType", 0);
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenReturn(Collections.singletonList(row));
+                when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any())).thenReturn(1);
                 repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null);
 
                 // 6. status changed from 候補中 (遞補邏輯)
+                reset(jdbcTemplate);
                 row.put("Status", "候補中");
                 row.put("CurrentOrder", 5);
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenReturn(Collections.singletonList(row));
                 when(jdbcTemplate.queryForObject(contains("SELECT InstitutionID"), eq(String.class), anyString()))
                                 .thenReturn(instId.toString());
+                when(jdbcTemplate.update(contains("CurrentOrder - 1"), anyInt(), anyString())).thenReturn(1);
+                when(jdbcTemplate.update(eq("UPDATE application_participants SET Status = ?, Reason = ?, ReviewDate = ?, CurrentOrder = ? WHERE ApplicationID = ? AND NationalID = ? AND ParticipantType = 0"),
+                                any(), any(), any(), any(), any(), any())).thenReturn(1);
                 repository.updateParticipantStatusReason(appId, nationalID, "已錄取", "reason", null);
 
-                // 7. Exceptions in queries
+                // 7. Exceptions in queries - 這些異常應該被 repository 內部捕獲
+                reset(jdbcTemplate);
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenThrow(new RuntimeException("QueryList Fail"));
-                repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null);
+                // Repository 應該捕獲異常並優雅地處理，不應該讓異常向上傳播
+                assertDoesNotThrow(() -> repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null));
 
                 reset(jdbcTemplate);
                 row.put("Status", "審核中");
+                row.put("ParticipantType", 0);
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenReturn(Collections.singletonList(row));
                 when(jdbcTemplate.queryForObject(contains("SELECT InstitutionID"), eq(String.class), anyString()))
                                 .thenThrow(new RuntimeException("Inst Fail"));
-                repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null);
+                // Repository 應該捕獲異常並優雅地處理
+                assertDoesNotThrow(() -> repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null));
         }
 
         @Test
@@ -120,29 +129,32 @@ public class ApplicationsJdbcRepositoryExhaustiveTest {
                 Map<String, Object> row = new HashMap<>();
                 row.put("Status", "審核中");
                 row.put("ParticipantType", 0);
+                row.put("CurrentOrder", null);
+
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenReturn(Collections.singletonList(row));
 
                 // rowsAffected == 0
-                when(jdbcTemplate.update(anyString(), (Object) any(), (Object) any(), (Object) any(), (Object) any(),
-                                (Object) any(), (Object) any())).thenReturn(0);
+                when(jdbcTemplate.update(eq("UPDATE application_participants SET Status = ?, Reason = ?, ReviewDate = ?, CurrentOrder = ? WHERE ApplicationID = ? AND NationalID = ? AND ParticipantType = 0"),
+                                any(), any(), any(), any(), any(), any())).thenReturn(0);
                 repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", LocalDateTime.now());
 
                 // rowsAffected > 1
                 reset(jdbcTemplate);
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenReturn(Collections.singletonList(row));
-                when(jdbcTemplate.update(anyString(), (Object) any(), (Object) any(), (Object) any(), (Object) any(),
-                                (Object) any(), (Object) any())).thenReturn(2);
+                when(jdbcTemplate.update(eq("UPDATE application_participants SET Status = ?, Reason = ?, ReviewDate = ?, CurrentOrder = ? WHERE ApplicationID = ? AND NationalID = ? AND ParticipantType = 0"),
+                                any(), any(), any(), any(), any(), any())).thenReturn(2);
                 repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null);
 
-                // update fails
+                // update fails - Repository 應該捕獲異常
                 reset(jdbcTemplate);
                 when(jdbcTemplate.queryForList(anyString(), (Object) any(), (Object) any()))
                                 .thenReturn(Collections.singletonList(row));
-                when(jdbcTemplate.update(anyString(), (Object) any(), (Object) any(), (Object) any(), (Object) any(),
-                                (Object) any(), (Object) any())).thenThrow(new RuntimeException("Update Fail"));
-                repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null);
+                when(jdbcTemplate.update(eq("UPDATE application_participants SET Status = ?, Reason = ?, ReviewDate = ?, CurrentOrder = ? WHERE ApplicationID = ? AND NationalID = ? AND ParticipantType = 0"),
+                                any(), any(), any(), any(), any(), any())).thenThrow(new RuntimeException("Update Fail"));
+                // Repository 應該捕獲異常並優雅地處理
+                assertDoesNotThrow(() -> repository.updateParticipantStatusReason(appId, nationalID, "候補中", "reason", null));
         }
 
         // ===========================================================================================

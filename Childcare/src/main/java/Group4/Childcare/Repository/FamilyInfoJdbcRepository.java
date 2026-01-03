@@ -25,7 +25,12 @@ public class FamilyInfoJdbcRepository {
         @Override
         public FamilyInfo mapRow(ResultSet rs, int rowNum) throws SQLException {
             FamilyInfo familyInfo = new FamilyInfo();
-            familyInfo.setFamilyInfoID(UUID.fromString(rs.getString("FamilyInfoID")));
+            String idStr = rs.getString("FamilyInfoID");
+            if (idStr != null) {
+                familyInfo.setFamilyInfoID(UUID.fromString(idStr));
+            } else {
+                familyInfo.setFamilyInfoID(null);
+            }
             return familyInfo;
         }
     };

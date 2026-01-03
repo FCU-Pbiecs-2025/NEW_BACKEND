@@ -26,7 +26,8 @@ public class RulesJdbcRepository {
     @Override
     public Rules mapRow(ResultSet rs, int rowNum) throws SQLException {
       Rules rules = new Rules();
-      rules.setId(rs.getLong("id"));
+      long id = rs.getLong("id");
+      rules.setId(rs.wasNull() ? null : id);
       rules.setAdmissionEligibility(rs.getString("AdmissionEligibility"));
       rules.setServiceContentAndTime(rs.getString("ServiceContentAndTime"));
       rules.setFeeAndRefundPolicy(rs.getString("FeeAndRefundPolicy"));

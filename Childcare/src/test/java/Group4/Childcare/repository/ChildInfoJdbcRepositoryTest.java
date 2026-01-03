@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -225,6 +227,160 @@ class ChildInfoJdbcRepositoryTest {
 
         // Then
         verify(jdbcTemplate, times(1)).update(anyString(), eq(testChildId.toString()));
+    }
+
+    // ==================== RowMapper Tests ====================
+
+    @Test
+    void testRowMapper_FullData() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("ChildID")).thenReturn(testChildId.toString());
+        when(rs.getString("NationalID")).thenReturn("A123456789");
+        when(rs.getString("Name")).thenReturn("王小明");
+        when(rs.getBoolean("Gender")).thenReturn(true);
+        when(rs.getDate("BirthDate")).thenReturn(java.sql.Date.valueOf(LocalDate.of(2020, 1, 1)));
+        when(rs.getString("FamilyInfoID")).thenReturn(testFamilyInfoId.toString());
+        when(rs.getString("HouseholdAddress")).thenReturn("台北市");
+
+        final RowMapper<ChildInfo>[] capturedMapper = new RowMapper[1];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+            capturedMapper[0] = invocation.getArgument(1);
+            return Collections.emptyList();
+        });
+
+        childInfoRepository.findAll();
+        assertNotNull(capturedMapper[0]);
+
+        // When
+        ChildInfo result = capturedMapper[0].mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(testChildId, result.getChildID());
+        assertEquals("王小明", result.getName());
+        assertEquals(LocalDate.of(2020, 1, 1), result.getBirthDate());
+        assertEquals(testFamilyInfoId, result.getFamilyInfoID());
+        assertEquals("台北市", result.getHouseholdAddress());
+    }
+
+    @Test
+    void testRowMapper_NullOptionalFields() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("ChildID")).thenReturn(testChildId.toString());
+        when(rs.getString("NationalID")).thenReturn("A123456789");
+        when(rs.getString("Name")).thenReturn("王小明");
+        when(rs.getBoolean("Gender")).thenReturn(true);
+        when(rs.getDate("BirthDate")).thenReturn(null);
+        when(rs.getString("FamilyInfoID")).thenReturn(null);
+        when(rs.getString("HouseholdAddress")).thenReturn("台北市");
+
+        final RowMapper<ChildInfo>[] capturedMapper = new RowMapper[1];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+            capturedMapper[0] = invocation.getArgument(1);
+            return Collections.emptyList();
+        });
+
+        childInfoRepository.findAll();
+
+        // When
+        ChildInfo result = capturedMapper[0].mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getBirthDate());
+        assertNull(result.getFamilyInfoID());
+    }
+
+    // ==================== Additional Branch Tests ====================
+
+    @Test
+    void testSave_NullFamilyInfoId_Success() {
+        // Given
+        ChildInfo childInfo = createTestChildInfo();
+        childInfo.setFamilyInfoID(null);
+
+        when(jdbcTemplate.update(anyString(), any(), anyString(), anyString(),
+                anyBoolean(), any(), isNull(), anyString()))
+            .thenReturn(1);
+
+        // When
+        ChildInfo result = childInfoRepository.save(childInfo);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getFamilyInfoID());
+    }
+
+    @Test
+    void testPut_NullFamilyInfoId_Success() {
+        // Given
+        ChildInfo childInfo = createTestChildInfo();
+        childInfo.setFamilyInfoID(null);
+
+        when(jdbcTemplate.update(anyString(), anyString(), anyString(), anyBoolean(),
+                any(), isNull(), anyString(), any()))
+            .thenReturn(1);
+
+        // When
+        ChildInfo result = childInfoRepository.put(childInfo);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getFamilyInfoID());
+    }
+
+    @Test
+    void testCount_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
+            .thenReturn(null);
+
+        // When
+        long count = childInfoRepository.count();
+
+        // Then
+        assertEquals(0L, count);
+    }
+
+    @Test
+    void testExistsById_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString()))
+            .thenReturn(null);
+
+        // When
+        boolean exists = childInfoRepository.existsById(testChildId);
+
+        // Then
+        assertFalse(exists);
+    }
+
+    @Test
+    void testDelete_Entity_Success() {
+        // Given
+        ChildInfo childInfo = createTestChildInfo();
+
+        // When
+        childInfoRepository.delete(childInfo);
+
+        // Then
+        verify(jdbcTemplate, times(1)).update(anyString(), eq(testChildId.toString()));
+    }
+
+    @Test
+    void testFindByFamilyInfoID_Success() {
+        // Given
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(testFamilyInfoId.toString())))
+            .thenReturn(Collections.singletonList(createTestChildInfo()));
+
+        // When
+        List<ChildInfo> result = childInfoRepository.findByFamilyInfoID(testFamilyInfoId);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(1, result.size());
     }
 
     // ==================== Helper Methods ====================

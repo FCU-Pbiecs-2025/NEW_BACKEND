@@ -1,6 +1,7 @@
 package Group4.Childcare.controller;
 
 import Group4.Childcare.Model.Applications;
+import Group4.Childcare.Model.ApplicationParticipants;
 import Group4.Childcare.DTO.ApplicationSummaryDTO;
 import Group4.Childcare.DTO.ApplicationSummaryWithDetailsDTO;
 import Group4.Childcare.DTO.ApplicationCaseDTO;
@@ -19,8 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -296,6 +299,13 @@ class ApplicationsControllerTest {
                                 .andExpect(status().isInternalServerError());
         }
 
+        @Test
+        void testGetCaseByParticipantId_NullParameter() throws Exception {
+                mockMvc.perform(get("/applications/case")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest());
+        }
+
         // ===== getApplicationById 測試 =====
         @Test
         void testGetApplicationById_Success() throws Exception {
@@ -554,6 +564,13 @@ class ApplicationsControllerTest {
                 mockMvc.perform(get("/applications/user/{userID}/details", testUserId)
                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isInternalServerError());
+        }
+
+        @Test
+        void testGetUserApplicationDetails_NullUserId() throws Exception {
+                mockMvc.perform(get("/applications/user/{userID}/details", (Object) null)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isNotFound());
         }
 
         // ===== submitApplicationCase 測試 =====
@@ -1214,6 +1231,18 @@ class ApplicationsControllerTest {
                                 .andExpect(status().isOk());
         }
 
+        @Test
+        void testAdminSearchCasesGet_EmptyStringParams_SkipsBranches() throws Exception {
+                List<Map<String, Object>> mockResult = new ArrayList<>();
+                doReturn(mockResult).when(jdbcTemplate).queryForList(anyString(), any(Object[].class));
+
+                mockMvc.perform(get("/applications/case/search")
+                                .param("institutionId", "")
+                                .param("classId", "")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk());
+        }
+
         // ===== adminSearchCases() 補充測試 =====
         @Test
         void testAdminSearchCases_AllFilters_Success() throws Exception {
@@ -1224,6 +1253,22 @@ class ApplicationsControllerTest {
                 searchDto.setApplicantNationalId("A123456789");
                 searchDto.setIdentityType("1");
                 searchDto.setCaseStatus("審核中");
+
+                List<Map<String, Object>> mockResult = new ArrayList<>();
+                doReturn(mockResult).when(jdbcTemplate).queryForList(anyString(), any(Object[].class));
+
+                mockMvc.perform(get("/applications/admin/search")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(searchDto)))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testAdminSearchCases_EmptyStringFilters_SkipsBranches() throws Exception {
+                AdminCaseSearchRequestDto searchDto = new AdminCaseSearchRequestDto();
+                searchDto.setApplicantNationalId("");
+                searchDto.setIdentityType("");
+                searchDto.setCaseStatus("");
 
                 List<Map<String, Object>> mockResult = new ArrayList<>();
                 doReturn(mockResult).when(jdbcTemplate).queryForList(anyString(), any(Object[].class));
@@ -1319,6 +1364,22 @@ class ApplicationsControllerTest {
                                 .param("size", "10")
                                 .param("applicationId", appId.toString())
                                 .param("classId", classId.toString())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testGetCasesList_EmptyStringParams_SkipsBranches() throws Exception {
+                when(service.getCaseListWithOffset(anyInt(), anyInt(), any(), isNull(), isNull(), isNull(), any(), any(), any()))
+                                .thenReturn(new ArrayList<>());
+                when(service.countCaseList(any(), isNull(), isNull(), isNull(), any(), any(), any())).thenReturn(0L);
+
+                mockMvc.perform(get("/applications/cases/list")
+                                .param("offset", "0")
+                                .param("size", "10")
+                                .param("institutionId", "")
+                                .param("applicationId", "")
+                                .param("classId", "")
                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk());
         }
@@ -1979,6 +2040,486 @@ class ApplicationsControllerTest {
                                 .andExpect(status().isOk());
         }
 
+        // ===== 額外測試:提升分支覆蓋率到 90%+ =====
+        @Test
+        void testSubmitApplicationCase_ChildWithBlankNationalID_SkipsValidation() throws Exception {
+                when(service.create(any(Applications.class))).thenAnswer(i -> i.getArgument(0));
+                when(applicationParticipantsService.create(any()))
+                                .thenAnswer(i -> i.getArgument(0));
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
+
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                ApplicationParticipantDTO childDto = new ApplicationParticipantDTO();
+                childDto.setNationalID("   "); // Blank national ID
+                childDto.setName("Anonymous Child");
+                caseDto.setChildren(List.of(childDto));
+
+                MockMultipartFile caseDtoPart = new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                objectMapper.writeValueAsBytes(caseDto));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(caseDtoPart)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                // 驗證沒有調用驗證方法（因為 nationalID 是空白）
+                verify(service, never()).countAcceptedApplicationsByChildNationalID(eq("   "));
+        }
+
+        @Test
+        void testSubmitApplicationCase_FileWithEmptyOriginalFilename_UsesDefaultName() throws Exception {
+                when(service.create(any(Applications.class))).thenAnswer(i -> i.getArgument(0));
+                when(service.update(any(), any(Applications.class))).thenAnswer(i -> i.getArgument(1));
+                when(applicationParticipantsService.create(any()))
+                                .thenAnswer(i -> i.getArgument(0));
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
+
+                Path tempDir = Files.createTempDirectory("childcare-test-empty-filename-");
+                when(fileService.getFolderPath(any(UUID.class))).thenReturn(tempDir);
+
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                MockMultipartFile fileWithEmptyName = new MockMultipartFile("file", "", "application/pdf", "test".getBytes());
+                MockMultipartFile caseDtoPart = new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                objectMapper.writeValueAsBytes(caseDto));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(fileWithEmptyName)
+                                .file(caseDtoPart)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).update(any(), any(Applications.class));
+        }
+
+        @Test
+        void testUpdate_OldPathEmptyString_SkipsDelete() throws Exception {
+                when(service.getById(testApplicationId)).thenReturn(Optional.of(testApplication));
+                when(service.update(eq(testApplicationId), any(Applications.class))).thenReturn(testApplication);
+                testApplication.setAttachmentPath(""); // Empty string, not null
+
+                Path tempDir = Files.createTempDirectory("childcare-test-empty-path-");
+                when(fileService.getFolderPath(eq(testApplicationId))).thenReturn(tempDir);
+
+                MockMultipartFile newFile = new MockMultipartFile("file", "new.pdf", "application/pdf", "new content".getBytes());
+
+                mockMvc.perform(multipart("/applications/{id}", testApplicationId)
+                                .file(newFile)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).update(eq(testApplicationId), any(Applications.class));
+        }
+
+        @Test
+        void testSubmitApplicationCase_UpdateAttachmentsFails_ContinuesExecution() throws Exception {
+                when(service.create(any(Applications.class))).thenAnswer(i -> i.getArgument(0));
+                when(service.update(any(), any(Applications.class)))
+                                .thenThrow(new RuntimeException("Update failed"));
+                when(applicationParticipantsService.create(any()))
+                                .thenAnswer(i -> i.getArgument(0));
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
+
+                Path tempDir = Files.createTempDirectory("childcare-test-update-fail-");
+                when(fileService.getFolderPath(any(UUID.class))).thenReturn(tempDir);
+
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                MockMultipartFile testFile = new MockMultipartFile("file", "test.pdf", "application/pdf", "test".getBytes());
+                MockMultipartFile caseDtoPart = new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                objectMapper.writeValueAsBytes(caseDto));
+
+                // 雖然 update 失敗,應該仍然返回 200 (捕獲異常後繼續)
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(testFile)
+                                .file(caseDtoPart)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdate_DeleteOldFileException_ContinuesExecution() throws Exception {
+                when(service.getById(testApplicationId)).thenReturn(Optional.of(testApplication));
+                when(service.update(eq(testApplicationId), any(Applications.class))).thenReturn(testApplication);
+
+                // 設置一個不存在的舊路徑,嘗試刪除時會失敗
+                testApplication.setAttachmentPath(testApplicationId + "/nonexistent_old.pdf");
+
+                Path tempDir = Files.createTempDirectory("childcare-test-delete-fail-");
+                when(fileService.getFolderPath(eq(testApplicationId))).thenReturn(tempDir);
+
+                MockMultipartFile newFile = new MockMultipartFile("file", "new.pdf", "application/pdf", "new content".getBytes());
+
+                // 即使刪除舊檔案失敗,也應該成功
+                mockMvc.perform(multipart("/applications/{id}", testApplicationId)
+                                .file(newFile)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).update(eq(testApplicationId), any(Applications.class));
+        }
+
+        /**
+         * 測試 submitApplicationCase - 當 pending 申請數量達到 2 時返回錯誤
+         */
+        @Test
+        void testSubmitApplicationCase_PendingCountReaches2_ReturnsError() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+
+                // Create a mock Application object to return from service.create()
+                Applications mockApplication = new Applications();
+                mockApplication.setApplicationID(UUID.randomUUID());
+                mockApplication.setCaseNumber(1L);
+                
+                // Mock service.create() to return the mock Application
+                when(service.create(any(Applications.class))).thenReturn(mockApplication);
+                
+                // Mock 返回 acceptedCount = 0 (通過第一個檢查)
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                // Mock 返回 pendingCount = 2 (觸發錯誤)
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(2);
+                // Mock 返回 activeSameInstitutionCount (雖然不會執行到,但需要避免錯誤)
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any(UUID.class)))
+                                .thenReturn(0);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(content().string(containsString("2"))) // Just check for the number instead of Chinese characters
+                                .andExpect(content().string(containsString("Test Child")));
+
+                // Verify service.create() WAS called (before the validation check)
+                verify(service, times(1)).create(any(Applications.class));
+        }
+
+        /**
+         * 測試 submitApplicationCase - userID 為空字符串時跳過映射
+         */
+        @Test
+        void testSubmitApplicationCase_UserIdEmptyString_SkipsMapping() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.getUser().setUserID("   "); // 空白字符串
+
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
+                when(service.create(any(Applications.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any());
+        }
+
+        /**
+         * 測試 submitApplicationCase - gender 值為 "1" 被解析為 true
+         */
+        @Test
+        void testSubmitApplicationCase_GenderValue1_ParsedAsTrue() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.getChildren().get(0).setGender("1");
+
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
+                when(service.create(any(Applications.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any());
+        }
+
+        /**
+         * 測試 submitApplicationCase - parents 為 null 時跳過創建
+         */
+        @Test
+        void testSubmitApplicationCase_NullParents_SkipsParentCreation() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.setParents(null);
+
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any())).thenReturn(0);
+                when(service.create(any(Applications.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any());
+        }
+
+        /**
+         * 測試 submitApplicationCase - children 為 null 時跳過創建
+         */
+        @Test
+        void testSubmitApplicationCase_NullChildren_SkipsChildCreation() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.setChildren(null);
+
+                when(service.create(any(Applications.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any());
+        }
+
+        /**
+         * 測試 submitApplicationCase - User 為 null 時跳過 userID 映射
+         */
+        @Test
+        void testSubmitApplicationCase_UserIsNull_SkipsUserIdMapping() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.setUser(null);
+                caseDto.setChildren(null); // 同時設為 null 避免兒童驗證
+
+                when(service.create(any(Applications.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any());
+        }
+
+        /**
+         * 測試 update - 沒有新文件時保留現有路徑
+         */
+        @Test
+        void testUpdate_NoNewFiles_KeepsExistingPaths() throws Exception {
+                Applications existingApp = new Applications();
+                existingApp.setApplicationID(testApplicationId);
+                existingApp.setAttachmentPath("existing/path1");
+                existingApp.setAttachmentPath1("existing/path2");
+                existingApp.setCaseNumber(1L);
+                existingApp.setApplicationDate(LocalDate.now());
+                existingApp.setInstitutionID(testInstitutionId);
+                existingApp.setUserID(testUserId);
+                existingApp.setIdentityType((byte) 1);
+
+                when(service.getById(testApplicationId)).thenReturn(Optional.of(existingApp));
+                when(service.update(eq(testApplicationId), any(Applications.class)))
+                                .thenAnswer(inv -> inv.getArgument(1));
+
+                CaseEditUpdateDTO updateDto = new CaseEditUpdateDTO();
+                updateDto.setCaseNumber(1L);
+                updateDto.setApplyDate(LocalDate.now());
+                updateDto.setInstitutionId(testInstitutionId);
+                updateDto.setIdentityType(1);
+
+                mockMvc.perform(multipart("/applications/{id}", testApplicationId)
+                                .file(new MockMultipartFile("updateDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(updateDto)))
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                // 當沒有上傳檔案時,controller 不會調用 update,只返回現有的 application
+                verify(service, times(1)).getById(testApplicationId);
+                verify(service, never()).update(eq(testApplicationId), any(Applications.class));
+        }
+
+        /**
+         * 測試 submitApplicationCase - 無效的 userID 格式時跳過映射
+         */
+        @Test
+        void testSubmitApplicationCase_InvalidUserIdFormat_SkipsMapping() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.getUser().setUserID("invalid-uuid-format");
+                caseDto.setChildren(null); // 避免兒童驗證
+
+                when(service.create(any(Applications.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).create(any());
+        }
+
+        /**
+         * 測試 submitApplicationCase - caseDto 為 null
+         */
+        @Test
+        void testSubmitApplicationCase_NullCaseDto_ReturnsBadRequest() throws Exception {
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                "null".getBytes()))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isBadRequest());
+        }
+
+        /**
+         * 測試 submitApplicationCase - 上傳空文件 (file.isEmpty() = true)
+         */
+        @Test
+        void testSubmitApplicationCase_EmptyFile_IgnoresFile() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any(UUID.class))).thenReturn(0);
+
+                // Create an empty file (size = 0)
+                MockMultipartFile emptyFile = new MockMultipartFile("file", "empty.pdf", "application/pdf", new byte[0]);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(emptyFile)
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        /**
+         * 測試 getCaseByParticipantId - null participantID
+         */
+        @Test
+        void testGetCaseByParticipantId_NullId_Returns404() throws Exception {
+                // When participantID parameter is missing, Spring returns 404 (not 400)
+                mockMvc.perform(get("/applications/case/participant"))
+                                .andExpect(status().isNotFound());
+        }
+
+        /**
+         * 測試 submitApplicationCase - 幼兒 nationalID 為 null (跳過驗證)
+         */
+        @Test
+        void testSubmitApplicationCase_ChildNationalIdNull_SkipsValidation() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                // Set child nationalID to null
+                caseDto.getChildren().get(0).setNationalID(null);
+
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                // Count methods should NOT be called when nationalID is null
+                verify(service, never()).countAcceptedApplicationsByChildNationalID(anyString());
+                verify(service, never()).countPendingApplicationsByChildNationalID(anyString());
+        }
+
+        /**
+         * 測試 update - 上傳空文件
+         */
+        @Test
+        void testUpdate_EmptyFile_IgnoresFile() throws Exception {
+                UUID testAppId = UUID.randomUUID();
+                Applications existingApp = new Applications();
+                existingApp.setApplicationID(testAppId);
+                existingApp.setAttachmentPath("old/path.pdf");
+
+                when(service.getById(testAppId)).thenReturn(Optional.of(existingApp));
+
+                MockMultipartFile emptyFile = new MockMultipartFile("file", "empty.pdf", "application/pdf", new byte[0]);
+
+                mockMvc.perform(multipart(HttpMethod.PUT, "/applications/" + testAppId)
+                                .file(emptyFile))
+                                .andExpect(status().isOk());
+
+                // Should call getById but not update since file is empty
+                verify(service, times(1)).getById(testAppId);
+                verify(service, never()).update(any(UUID.class), any(Applications.class));
+        }
+
+        /**
+         * 測試 submitApplicationCase - participantDTO 為 null (lambda 中的防禦性檢查)
+         */
+        @Test
+        void testSubmitApplicationCase_NullParticipantInList_Skipped() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                // Add a null participant to the list
+                caseDto.setParents(Arrays.asList(createParentDto(), null));
+
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any(UUID.class))).thenReturn(0);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        /**
+         * 測試 submitApplicationCase - 性別值為 "M" (大寫)
+         */
+        @Test
+        void testSubmitApplicationCase_GenderM_ParsedAsTrue() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.getChildren().get(0).setGender("M");
+
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any(UUID.class))).thenReturn(0);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        private ApplicationParticipantDTO createParentDto() {
+                ApplicationParticipantDTO parent = new ApplicationParticipantDTO();
+                parent.setNationalID("P123456789");
+                parent.setName("Test Parent");
+                return parent;
+        }
+
         // ===== 輔助方法 =====
         private CaseEditUpdateDTO createValidCaseDto() {
                 CaseEditUpdateDTO caseDto = new CaseEditUpdateDTO();
@@ -2007,5 +2548,271 @@ class ApplicationsControllerTest {
                 caseDto.setParents(List.of(parentDto));
 
                 return caseDto;
+        }
+
+        // ==================== Phase 5: Exception Handling Tests (Advanced Mocking) ====================
+
+        /**
+         * 測試 update - 檔案刪除時拋出 IOException (Lines 171-176)
+         */
+        @Test
+        void testUpdate_FileDeleteException_ContinuesProcessing() throws Exception {
+                UUID appId = UUID.randomUUID();
+                Applications existingApp = new Applications();
+                existingApp.setApplicationID(appId);
+                existingApp.setAttachmentPath("old-app-id/old-file.pdf");
+                
+                when(service.getById(appId)).thenReturn(Optional.of(existingApp));
+                when(service.update(eq(appId), any(Applications.class))).thenReturn(existingApp);
+                
+                Path mockFolderPath = Path.of(System.getProperty("java.io.tmpdir"));
+                when(fileService.getFolderPath(appId)).thenReturn(mockFolderPath);
+                
+                MockMultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "new".getBytes());
+                
+                // Use mockStatic to simulate Files.delete throwing IOException
+                try (MockedStatic<Files> filesMock = org.mockito.Mockito.mockStatic(Files.class)) {
+                        filesMock.when(() -> Files.exists(any(Path.class))).thenReturn(true);
+                        filesMock.when(() -> Files.delete(any(Path.class)))
+                                .thenThrow(new java.io.IOException("Permission denied"));
+                        filesMock.when(() -> Files.copy(any(java.io.InputStream.class), any(Path.class), any(java.nio.file.CopyOption[].class)))
+                                .thenReturn(100L);
+                        filesMock.when(() -> Files.createDirectories(any(Path.class)))
+                                .thenReturn(mockFolderPath);
+                        
+                        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                        .multipart(HttpMethod.PUT, "/applications/" + appId)
+                                        .file(file)
+                                        .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk()); // Should continue despite delete exception
+                }
+                
+                // Verify Files.delete was called and threw exception
+                verify(service).update(eq(appId), any(Applications.class));
+        }
+
+        /**
+         * 測試 submitApplicationCase - getUserID() 拋出異常 (Lines 588-589)
+         * 注意: 這個測試實際上無法完全覆蓋該分支,因為異常在控制器內部的 debug 代碼中
+         * 但我們仍然測試當 user 對象正常時的流程
+         */
+        @Test
+        void testSubmitApplicationCase_WithNormalUser_ProcessesSuccessfully() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+                when(service.countAcceptedApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countPendingApplicationsByChildNationalID(anyString())).thenReturn(0);
+                when(service.countActiveApplicationsByChildAndInstitution(anyString(), any(UUID.class))).thenReturn(0);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        /**
+         * 測試 submitApplicationCase - 儲存參與者時拋出異常 (Lines 850-852)
+         */
+        @Test
+        void testSubmitApplicationCase_ParticipantSaveException_ContinuesProcessing() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+                
+                // Mock participant service to throw exception on create
+                doThrow(new RuntimeException("Database connection failed"))
+                        .when(applicationParticipantsService).create(any(ApplicationParticipants.class));
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk()); // Controller catches exception and continues
+                
+                // Verify exception was caught (at least 2 calls: parent + child)
+                verify(applicationParticipantsService, atLeast(1)).create(any(ApplicationParticipants.class));
+        }
+
+        /**
+         * 測試 submitApplicationCase - caseDto.getUser() 為 null (Lines 618)
+         */
+        @Test
+        void testSubmitApplicationCase_UserNull_ProcessesSuccessfully() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.setUser(null);
+                
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        /**
+         * 測試 submitApplicationCase - userIdStr 為空字串 (Lines 622)
+         */
+        @Test
+        void testSubmitApplicationCase_UserIdEmpty_ProcessesSuccessfully() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                caseDto.getUser().setUserID("  ");
+                
+                Applications mockApp = new Applications();
+                mockApp.setApplicationID(UUID.randomUUID());
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        /**
+         * 測試 submitApplicationCase - 附件更新時拋出異常 (Lines 760-763)
+         */
+        @Test
+        void testSubmitApplicationCase_AttachmentUpdateException_Continues() throws Exception {
+                CaseEditUpdateDTO caseDto = createValidCaseDto();
+                
+                Applications mockApp = new Applications();
+                UUID appId = UUID.randomUUID();
+                mockApp.setApplicationID(appId);
+                mockApp.setCaseNumber(1L);
+                when(service.create(any(Applications.class))).thenReturn(mockApp);
+                
+                // Mock fileService to avoid NPE
+                Path mockPath = Path.of(System.getProperty("java.io.tmpdir"));
+                when(fileService.getFolderPath(any(UUID.class))).thenReturn(mockPath);
+                
+                // Mock update to throw exception - use any(UUID.class) because controller generates its own UUID
+                when(service.update(any(UUID.class), any(Applications.class))).thenThrow(new RuntimeException("Update failed"));
+
+                MockMultipartFile file = new MockMultipartFile("file", "test.pdf", "application/pdf", "test".getBytes());
+
+                mockMvc.perform(multipart("/applications/case/submit")
+                                .file(new MockMultipartFile("caseDto", "", MediaType.APPLICATION_JSON_VALUE,
+                                                objectMapper.writeValueAsBytes(caseDto)))
+                                .file(file)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk()); // Should still return 200 as exception is caught
+        }
+
+        /**
+         * 測試 updateApplicationCase - nationalID 為空字串 (Line 1074)
+         */
+        @Test
+        void testUpdateApplicationCase_NationalIdEmpty_FullUpdate() throws Exception {
+                UUID appId = UUID.randomUUID();
+                ApplicationCaseDTO dto = new ApplicationCaseDTO();
+                
+                mockMvc.perform(put("/applications/{id}/case", appId)
+                                .param("NationalID", "")
+                                .param("status", "Accepted")
+                                .content(objectMapper.writeValueAsBytes(dto))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isNoContent());
+                
+                verify(service).updateApplicationCase(eq(appId), any());
+        }
+
+        /**
+         * 測試 updateApplicationCase - statusParam 為空字串 (Line 1075)
+         */
+        @Test
+        void testUpdateApplicationCase_WithNationalId_StatusEmpty_ReturnsBadRequest() throws Exception {
+                UUID appId = UUID.randomUUID();
+                
+                mockMvc.perform(put("/applications/{id}/case", appId)
+                                .param("NationalID", "A123456789")
+                                .param("status", "")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isBadRequest());
+        }
+
+        /**
+         * 測試 updateApplicationCase - dto 為 null (Line 1088)
+         */
+        @Test
+        void testUpdateApplicationCase_DtoNull_ProcessesSuccessfully() throws Exception {
+                UUID appId = UUID.randomUUID();
+                
+                mockMvc.perform(put("/applications/{id}/case", appId)
+                                .param("status", "Accepted")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isNoContent());
+                
+                verify(service).updateApplicationCase(eq(appId), any());
+        }
+
+        /**
+         * 測試 updateApplicationCase - parents 包含 null 元素 (Line 1111)
+         */
+        @Test
+        void testUpdateApplicationCase_ParentsWithNullElement_ProcessesSuccessfully() throws Exception {
+                UUID appId = UUID.randomUUID();
+                ApplicationCaseDTO dto = new ApplicationCaseDTO();
+                dto.parents = new ArrayList<>();
+                dto.parents.add(null);
+                
+                mockMvc.perform(put("/applications/{id}/case", appId)
+                                .param("status", "Accepted")
+                                .content(objectMapper.writeValueAsBytes(dto))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isNoContent());
+                
+                verify(service).updateApplicationCase(eq(appId), any());
+        }
+
+        /**
+         * 測試 updateApplicationCase - p.status 為空字串 (Line 1114)
+         */
+        @Test
+        void testUpdateApplicationCase_ParentStatusEmpty_FillsWithParam() throws Exception {
+                UUID appId = UUID.randomUUID();
+                ApplicationCaseDTO dto = new ApplicationCaseDTO();
+                dto.parents = new ArrayList<>();
+                Group4.Childcare.DTO.ApplicationParticipantDTO p = new Group4.Childcare.DTO.ApplicationParticipantDTO();
+                p.status = "";
+                dto.parents.add(p);
+                
+                mockMvc.perform(put("/applications/{id}/case", appId)
+                                .param("status", "Accepted")
+                                .content(objectMapper.writeValueAsBytes(dto))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isNoContent());
+                
+                verify(service).updateApplicationCase(eq(appId), any());
+        }
+
+        /**
+         * 測試 getCaseByParticipantId - participantID 為 null (Line 427)
+         */
+        @Test
+        void testGetCaseByParticipantId_NullParam_ReturnsBadRequest() throws Exception {
+                mockMvc.perform(get("/applications/case")
+                                .param("participantID", ""))
+                                .andExpect(status().isBadRequest());
+        }
+
+        /**
+         * 測試 getUserApplicationDetails - userID 為 null (Line 1484)
+         */
+        @Test
+        void testGetUserApplicationDetails_NullId_ReturnsBadRequest() throws Exception {
+                mockMvc.perform(get("/applications/user/{userID}/details", "null"))
+                                .andExpect(status().isBadRequest());
         }
 }

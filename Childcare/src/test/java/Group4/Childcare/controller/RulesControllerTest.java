@@ -2,6 +2,7 @@ package Group4.Childcare.controller;
 
 import Group4.Childcare.Model.Rules;
 import Group4.Childcare.Service.RulesService;
+import Group4.Childcare.Repository.RulesJdbcRepository;
 import Group4.Childcare.Controller.RulesController;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,9 @@ class RulesControllerTest {
 
     @Mock
     private RulesService service;
+
+    @Mock
+    private RulesJdbcRepository jdbcRepository;
 
     @InjectMocks
     private RulesController controller;
@@ -162,4 +166,35 @@ class RulesControllerTest {
         verify(service, times(1)).update(eq(testRuleId), any(Rules.class));
     }
 
+    @Test
+    void testUpdateWithJdbc_Success() throws Exception {
+        // Given
+        testRule.setAdmissionEligibility("JDBC更新後的入學資格");
+        when(jdbcRepository.updateById(eq(testRuleId), any(Rules.class))).thenReturn(testRule);
+
+        // When & Then
+        mockMvc.perform(put("/rules/jdbc/{id}", testRuleId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testRule)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.admissionEligibility", is("JDBC更新後的入學資格")));
+
+        verify(jdbcRepository, times(1)).updateById(eq(testRuleId), any(Rules.class));
+    }
+
+    @Test
+    void testUpdateWithJdbc_NotFound() throws Exception {
+        // Given
+        Long nonExistentId = 999L;
+        when(jdbcRepository.updateById(eq(nonExistentId), any(Rules.class)))
+                .thenThrow(new RuntimeException("Rule not found"));
+
+        // When & Then
+        mockMvc.perform(put("/rules/jdbc/{id}", nonExistentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testRule)))
+                .andExpect(status().isNotFound());
+
+        verify(jdbcRepository, times(1)).updateById(eq(nonExistentId), any(Rules.class));
+    }
 }

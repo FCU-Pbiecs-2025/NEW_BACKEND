@@ -7,6 +7,7 @@ import Group4.Childcare.DTO.UpdateConfirmDateRequest;
 import Group4.Childcare.DTO.CreateRevokeRequest;
 import Group4.Childcare.DTO.ApplicationParticipantDTO;
 import Group4.Childcare.Controller.RevokeController;
+import Group4.Childcare.exception.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,7 +56,9 @@ class RevokeControllerTest {
 
         @BeforeEach
         void setUp() {
-                mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+                mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                                .setControllerAdvice(new GlobalExceptionHandler())
+                                .build();
                 objectMapper = new ObjectMapper();
                 objectMapper.registerModule(new JavaTimeModule());
         }
@@ -351,5 +354,340 @@ class RevokeControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isInternalServerError());
+        }
+
+        // ===== 額外的邊界條件和異常測試 =====
+
+        @Test
+        void testGetRevokedApplications_WithPagination() throws Exception {
+                List<RevokeApplicationDTO> content = new ArrayList<>();
+                when(revokeService.getRevokedApplications(eq(1), eq(10), any(), any(), any()))
+                                .thenReturn(content);
+                when(revokeService.getTotalRevokedApplications(any(), any(), any()))
+                                .thenReturn(25L);
+
+                mockMvc.perform(get("/revoke/applications")
+                                .param("offset", "10")
+                                .param("size", "10")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.hasNext", is(true)))
+                                .andExpect(jsonPath("$.totalPages", is(3)));
+        }
+
+        @Test
+        void testSearchRevokedApplications_WithTrimmedParams() throws Exception {
+                List<RevokeApplicationDTO> content = new ArrayList<>();
+                when(revokeService.searchRevokedApplicationsPaged(eq("12345"), eq("A123456789"), anyInt(), anyInt(), eq("inst-123")))
+                                .thenReturn(content);
+                when(revokeService.countSearchRevokedApplications(eq("12345"), eq("A123456789"), eq("inst-123")))
+                                .thenReturn(10L);
+
+                mockMvc.perform(get("/revoke/search")
+                                .param("caseNumber", "  12345  ")
+                                .param("nationalID", "  A123456789  ")
+                                .param("institutionID", "  inst-123  ")
+                                .param("offset", "0")
+                                .param("size", "10")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk());
+
+                verify(revokeService).searchRevokedApplicationsPaged(eq("12345"), eq("A123456789"), anyInt(), anyInt(), eq("inst-123"));
+        }
+
+        @Test
+        void testSearchRevokedApplications_ExceedsMaxSize() throws Exception {
+                List<RevokeApplicationDTO> content = new ArrayList<>();
+                when(revokeService.searchRevokedApplicationsPaged(any(), any(), anyInt(), eq(100), any()))
+                                .thenReturn(content);
+                when(revokeService.countSearchRevokedApplications(any(), any(), any()))
+                                .thenReturn(0L);
+
+                mockMvc.perform(get("/revoke/search")
+                                .param("offset", "0")
+                                .param("size", "200")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.size", is(100)));
+        }
+
+        @Test
+        void testGetRevokeDetails_NullRequest() throws Exception {
+                mockMvc.perform(post("/revoke/details")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error", containsString("cancellationID")));
+        }
+
+        @Test
+        void testGetRevokeDetails_EmptyCancellationID() throws Exception {
+                RevokeSearchRequest request = new RevokeSearchRequest();
+                request.setCancellationID("");
+                request.setNationalID("A123456789");
+
+                mockMvc.perform(post("/revoke/details")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testGetRevokeDetails_EmptyNationalID() throws Exception {
+                RevokeSearchRequest request = new RevokeSearchRequest();
+                request.setCancellationID("test-cancel-id");
+                request.setNationalID("");
+
+                mockMvc.perform(post("/revoke/details")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testGetRevokeDetails_GeneralException() throws Exception {
+                RevokeSearchRequest request = new RevokeSearchRequest();
+                request.setCancellationID("test-cancel-id");
+                request.setNationalID("A123456789");
+
+                when(revokeService.getParentsByCancellation("test-cancel-id"))
+                                .thenThrow(new RuntimeException("Database connection error"));
+
+                mockMvc.perform(post("/revoke/details")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.error", is("Database connection error")));
+        }
+
+        @Test
+        void testUpdateConfirmDate_NullCancellationID() throws Exception {
+                UpdateConfirmDateRequest request = new UpdateConfirmDateRequest();
+                request.setConfirmDate(LocalDate.now());
+
+                mockMvc.perform(put("/revoke/confirm-date")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error", containsString("cancellationID")));
+        }
+
+        @Test
+        void testUpdateConfirmDate_EmptyCancellationID() throws Exception {
+                UpdateConfirmDateRequest request = new UpdateConfirmDateRequest();
+                request.setCancellationID("");
+                request.setConfirmDate(LocalDate.now());
+
+                mockMvc.perform(put("/revoke/confirm-date")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpdateConfirmDate_NullConfirmDate() throws Exception {
+                UpdateConfirmDateRequest request = new UpdateConfirmDateRequest();
+                request.setCancellationID("test-cancel-id");
+
+                mockMvc.perform(put("/revoke/confirm-date")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpdateConfirmDate_Exception() throws Exception {
+                UpdateConfirmDateRequest request = new UpdateConfirmDateRequest();
+                request.setCancellationID("test-cancel-id");
+                request.setConfirmDate(LocalDate.now());
+
+                when(revokeService.updateConfirmDate(anyString(), any(LocalDate.class)))
+                                .thenThrow(new RuntimeException("Update failed"));
+
+                mockMvc.perform(put("/revoke/confirm-date")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.error", is("Update failed")));
+        }
+
+        @Test
+        void testUpdateParticipantStatus_NullRequest() throws Exception {
+                mockMvc.perform(put("/revoke/update-participant-status")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpdateParticipantStatus_EmptyApplicationID() throws Exception {
+                Map<String, String> request = new HashMap<>();
+                request.put("ApplicationID", "");
+                request.put("NationalID", "A123456789");
+                request.put("Status", "已撤銷");
+
+                mockMvc.perform(put("/revoke/update-participant-status")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpdateParticipantStatus_EmptyNationalID() throws Exception {
+                Map<String, String> request = new HashMap<>();
+                request.put("ApplicationID", "test-app-id");
+                request.put("NationalID", "");
+                request.put("Status", "已撤銷");
+
+                mockMvc.perform(put("/revoke/update-participant-status")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpdateParticipantStatus_EmptyStatus() throws Exception {
+                Map<String, String> request = new HashMap<>();
+                request.put("ApplicationID", "test-app-id");
+                request.put("NationalID", "A123456789");
+                request.put("Status", "");
+
+                mockMvc.perform(put("/revoke/update-participant-status")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpdateParticipantStatus_Exception() throws Exception {
+                Map<String, String> request = new HashMap<>();
+                request.put("ApplicationID", "test-app-id");
+                request.put("NationalID", "A123456789");
+                request.put("Status", "已撤銷");
+
+                when(revokeService.updateApplicationParticipantStatus(anyString(), anyString(), anyString()))
+                                .thenThrow(new RuntimeException("Update error"));
+
+                mockMvc.perform(put("/revoke/update-participant-status")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.error", is("Update error")));
+        }
+
+        @Test
+        void testCreateCancellation_NullRequest() throws Exception {
+                mockMvc.perform(post("/revoke/create")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("null"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error", is("Request body required")));
+        }
+
+        @Test
+        void testCreateCancellation_EmptyNationalID() throws Exception {
+                CreateRevokeRequest request = new CreateRevokeRequest();
+                request.setNationalID("");
+                request.setAbandonReason("個人因素");
+                request.setApplicationID("test-app-id");
+                request.setCaseNumber("12345");
+
+                mockMvc.perform(post("/revoke/create")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testCreateCancellation_EmptyAbandonReason() throws Exception {
+                CreateRevokeRequest request = new CreateRevokeRequest();
+                request.setNationalID("A123456789");
+                request.setAbandonReason("");
+                request.setApplicationID("test-app-id");
+                request.setCaseNumber("12345");
+
+                mockMvc.perform(post("/revoke/create")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testCreateCancellation_EmptyApplicationID() throws Exception {
+                CreateRevokeRequest request = new CreateRevokeRequest();
+                request.setNationalID("A123456789");
+                request.setAbandonReason("個人因素");
+                request.setApplicationID("");
+                request.setCaseNumber("12345");
+
+                mockMvc.perform(post("/revoke/create")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testCreateCancellation_EmptyCaseNumber() throws Exception {
+                CreateRevokeRequest request = new CreateRevokeRequest();
+                request.setNationalID("A123456789");
+                request.setAbandonReason("個人因素");
+                request.setApplicationID("test-app-id");
+                request.setCaseNumber("");
+
+                mockMvc.perform(post("/revoke/create")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testCreateCancellation_WithWhitespaceFields() throws Exception {
+                CreateRevokeRequest request = new CreateRevokeRequest();
+                request.setNationalID("  A123456789  ");
+                request.setAbandonReason("  個人因素  ");
+                request.setApplicationID("  test-app-id  ");
+                request.setCaseNumber("  12345  ");
+
+                doNothing().when(revokeService).createCancellation(eq("test-app-id"), eq("個人因素"), eq("A123456789"), eq("12345"));
+
+                mockMvc.perform(post("/revoke/create")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success", is(true)));
+
+                verify(revokeService).createCancellation(eq("test-app-id"), eq("個人因素"), eq("A123456789"), eq("12345"));
+        }
+
+        @Test
+        void testGetRevokedApplications_NoHasNext() throws Exception {
+                List<RevokeApplicationDTO> content = new ArrayList<>();
+                when(revokeService.getRevokedApplications(anyInt(), anyInt(), any(), any(), any()))
+                                .thenReturn(content);
+                when(revokeService.getTotalRevokedApplications(any(), any(), any()))
+                                .thenReturn(5L);
+
+                mockMvc.perform(get("/revoke/applications")
+                                .param("offset", "0")
+                                .param("size", "10")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.hasNext", is(false)));
+        }
+
+        @Test
+        void testSearchRevokedApplications_NoHasNext() throws Exception {
+                List<RevokeApplicationDTO> content = new ArrayList<>();
+                when(revokeService.searchRevokedApplicationsPaged(any(), any(), anyInt(), anyInt(), any()))
+                                .thenReturn(content);
+                when(revokeService.countSearchRevokedApplications(any(), any(), any()))
+                                .thenReturn(8L);
+
+                mockMvc.perform(get("/revoke/search")
+                                .param("offset", "0")
+                                .param("size", "10")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.hasNext", is(false)));
         }
 }

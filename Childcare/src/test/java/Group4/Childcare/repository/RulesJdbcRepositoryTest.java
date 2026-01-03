@@ -12,6 +12,9 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import org.mockito.ArgumentCaptor;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -360,5 +363,60 @@ class RulesJdbcRepositoryTest {
 
         // Then
         assertEquals(0, result);
+    }
+
+    // ===== 測試 RowMapper =====
+    @Test
+    void testRulesRowMapper_FullData() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getLong("id")).thenReturn(1L);
+        when(rs.wasNull()).thenReturn(false);
+        when(rs.getString("AdmissionEligibility")).thenReturn("資格");
+        when(rs.getString("ServiceContentAndTime")).thenReturn("內容");
+        when(rs.getString("FeeAndRefundPolicy")).thenReturn("政策");
+
+        // Capture the RowMapper
+        ArgumentCaptor<RowMapper<Rules>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(anyString(), mapperCaptor.capture())).thenReturn(Collections.emptyList());
+
+        // Trigger the capture
+        repository.findAll();
+        RowMapper<Rules> mapper = mapperCaptor.getValue();
+
+        // When
+        Rules result = mapper.mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(1L, result.getId());
+        assertEquals("資格", result.getAdmissionEligibility());
+        assertEquals("內容", result.getServiceContentAndTime());
+        assertEquals("政策", result.getFeeAndRefundPolicy());
+    }
+
+    @Test
+    void testRulesRowMapper_NullId() throws SQLException {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getLong("id")).thenReturn(0L);
+        when(rs.wasNull()).thenReturn(true);
+        when(rs.getString(anyString())).thenReturn(null);
+
+        // Capture the RowMapper
+        ArgumentCaptor<RowMapper<Rules>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(anyString(), mapperCaptor.capture())).thenReturn(Collections.emptyList());
+
+        // Trigger the capture
+        repository.findAll();
+        RowMapper<Rules> mapper = mapperCaptor.getValue();
+
+        // When
+        Rules result = mapper.mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getId());
+        assertNull(result.getAdmissionEligibility());
     }
 }

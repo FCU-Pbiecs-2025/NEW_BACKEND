@@ -5,12 +5,14 @@ import Group4.Childcare.Repository.FamilyInfoJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import java.sql.ResultSet;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -167,6 +169,19 @@ class FamilyInfoJdbcRepositoryTest {
         assertEquals(0L, count);
     }
 
+    @Test
+    void testCount_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
+            .thenReturn(null);
+
+        // When
+        long count = familyInfoRepository.count();
+
+        // Then
+        assertEquals(0L, count);
+    }
+
     // ==================== existsById Tests ====================
 
     @Test
@@ -187,6 +202,19 @@ class FamilyInfoJdbcRepositoryTest {
         // Given
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(testFamilyInfoId.toString())))
             .thenReturn(0);
+
+        // When
+        boolean exists = familyInfoRepository.existsById(testFamilyInfoId);
+
+        // Then
+        assertFalse(exists);
+    }
+
+    @Test
+    void testExistsById_Null() {
+        // Given
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString()))
+            .thenReturn(null);
 
         // When
         boolean exists = familyInfoRepository.existsById(testFamilyInfoId);
@@ -221,6 +249,61 @@ class FamilyInfoJdbcRepositoryTest {
 
         // Then
         verify(jdbcTemplate, times(1)).update(anyString(), eq(testFamilyInfoId.toString()));
+    }
+
+    @Test
+    void testDelete_Entity_Success() {
+        // Given
+        FamilyInfo familyInfo = createTestFamilyInfo();
+        when(jdbcTemplate.update(anyString(), eq(testFamilyInfoId.toString())))
+            .thenReturn(1);
+
+        // When
+        familyInfoRepository.delete(familyInfo);
+
+        // Then
+        verify(jdbcTemplate, times(1)).update(anyString(), eq(testFamilyInfoId.toString()));
+    }
+
+    // ==================== RowMapper Tests ====================
+
+    @Test
+    void testFamilyInfoRowMapper_FullData() throws Exception {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        UUID id = UUID.randomUUID();
+        when(rs.getString("FamilyInfoID")).thenReturn(id.toString());
+        when(rs.wasNull()).thenReturn(false);
+
+        ArgumentCaptor<RowMapper<FamilyInfo>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(anyString(), mapperCaptor.capture())).thenReturn(Collections.emptyList());
+
+        // When
+        familyInfoRepository.findAll();
+        FamilyInfo result = mapperCaptor.getValue().mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(id, result.getFamilyInfoID());
+    }
+
+    @Test
+    void testFamilyInfoRowMapper_NullId() throws Exception {
+        // Given
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("FamilyInfoID")).thenReturn(null);
+        when(rs.wasNull()).thenReturn(true);
+
+        ArgumentCaptor<RowMapper<FamilyInfo>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(anyString(), mapperCaptor.capture())).thenReturn(Collections.emptyList());
+
+        // When
+        familyInfoRepository.findAll();
+        FamilyInfo result = mapperCaptor.getValue().mapRow(rs, 1);
+
+        // Then
+        assertNotNull(result);
+        assertNull(result.getFamilyInfoID());
     }
 
     // ==================== Helper Methods ====================

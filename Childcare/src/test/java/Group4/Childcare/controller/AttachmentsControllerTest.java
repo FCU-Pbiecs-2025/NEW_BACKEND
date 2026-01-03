@@ -9,15 +9,20 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -157,5 +162,31 @@ class AttachmentsControllerTest {
                                 .file(file3))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.attachmentPaths", hasSize(4)));
+        }
+
+        @Test
+        void testUploadAttachments_skipsUpdateWhenApplicationIdMissing() throws Exception {
+                ResponseEntity<?> response = controller.uploadAttachments("", null, null, null, null);
+
+                @SuppressWarnings("unchecked")
+                List<String> paths = (List<String>) ((Map<?, ?>) response.getBody()).get("attachmentPaths");
+                assertEquals(Arrays.asList(null, null, null, null), paths);
+                verifyNoInteractions(applicationsJdbcRepository);
+        }
+
+        @Test
+        void testUploadAttachments_handlesInvalidApplicationId() throws Exception {
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "test.pdf", "application/pdf", "test".getBytes());
+
+                ResponseEntity<?> response = controller.uploadAttachments("invalid-uuid", file, null, null, null);
+
+                @SuppressWarnings("unchecked")
+                List<String> paths = (List<String>) ((Map<?, ?>) response.getBody()).get("attachmentPaths");
+                assertNotNull(paths.get(0));
+                assertNull(paths.get(1));
+                assertNull(paths.get(2));
+                assertNull(paths.get(3));
+                verifyNoInteractions(applicationsJdbcRepository);
         }
 }

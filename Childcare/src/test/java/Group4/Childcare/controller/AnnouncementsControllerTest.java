@@ -20,6 +20,10 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -57,16 +61,25 @@ class AnnouncementsControllerTest {
 
         private MockMvc mockMvc;
         private ObjectMapper objectMapper;
+        private Path storageLocation;
 
         private Announcements testAnnouncement;
         private UUID testAnnouncementId;
 
         @BeforeEach
-        void setUp() {
+        void setUp() throws IOException {
                 mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
                 objectMapper = new ObjectMapper();
                 objectMapper.registerModule(new JavaTimeModule());
                 objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+                // 設定測試用的 storageLocation
+                String basePath = System.getProperty("user.dir");
+                File dir = new File(basePath, "AttachmentResource");
+                if (!dir.exists()) {
+                        dir.mkdirs();
+                }
+                storageLocation = dir.toPath();
 
                 testAnnouncementId = UUID.randomUUID();
                 testAnnouncement = new Announcements();
@@ -634,4 +647,636 @@ class AnnouncementsControllerTest {
 
                 verify(service, times(1)).getById(testAnnouncementId);
         }
+
+        // ===== 額外分支覆蓋測試 =====
+
+        @Test
+        void testUpload_EmptyFile() throws Exception {
+                // Given - 空檔案
+                MockMultipartFile emptyFile = new MockMultipartFile(
+                                "file",
+                                "test.pdf",
+                                "application/pdf",
+                                new byte[0]);
+
+                Announcements meta = new Announcements();
+                meta.setTitle("測試");
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/upload")
+                                .file(emptyFile)
+                                .file(metaPart)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void testUpload_WithCreatedTime() throws Exception {
+                // Given - meta 已經有 CreatedTime
+                MockMultipartFile file = new MockMultipartFile(
+                                "file",
+                                "test.pdf",
+                                "application/pdf",
+                                "test content".getBytes());
+
+                Announcements meta = new Announcements();
+                meta.setTitle("測試");
+                meta.setCreatedTime(java.time.LocalDateTime.now().minusDays(1));
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                when(service.createAnnouncementJdbc(any(Announcements.class))).thenReturn(testAnnouncement);
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/upload")
+                                .file(file)
+                                .file(metaPart)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isCreated());
+
+                verify(service, times(1)).createAnnouncementJdbc(any(Announcements.class));
+        }
+
+        @Test
+        void testUpdateWithFile_AllMetaFields() throws Exception {
+                // Given - 更新所有 meta 欄位
+                Announcements meta = new Announcements();
+                meta.setTitle("新標題");
+                meta.setContent("新內容");
+                meta.setType((byte) 2);
+                meta.setStartDate(LocalDate.now());
+                meta.setEndDate(LocalDate.now().plusDays(10));
+                meta.setStatus((byte) 2);
+                meta.setCreatedUser("user1");
+                meta.setCreatedTime(java.time.LocalDateTime.now());
+                meta.setUpdatedUser("user2");
+                meta.setUpdatedTime(java.time.LocalDateTime.now());
+                meta.setAttachmentPath("custom-path.pdf");
+
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .param("meta", objectMapper.writeValueAsString(meta))
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateWithJdbc(eq(testAnnouncementId), any(Announcements.class));
+        }
+
+        @Test
+        void testUpdateWithFile_WithExistingAttachment() throws Exception {
+                // Given - 更新檔案時，existing 有舊附件
+                testAnnouncement.setAttachmentPath("old-file.pdf");
+                
+                MockMultipartFile file = new MockMultipartFile(
+                                "file",
+                                "new-file.pdf",
+                                "application/pdf",
+                                "new content".getBytes());
+
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                // When & Then - 舊檔案刪除失敗不影響更新
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(file)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateWithJdbc(eq(testAnnouncementId), any(Announcements.class));
+        }
+
+        @Test
+        void testUpdateWithFile_EmptyFile() throws Exception {
+                // Given - 空檔案應該被忽略
+                MockMultipartFile emptyFile = new MockMultipartFile(
+                                "file",
+                                "test.pdf",
+                                "application/pdf",
+                                new byte[0]);
+
+                Announcements meta = new Announcements();
+                meta.setTitle("測試");
+
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(emptyFile)
+                                .param("meta", objectMapper.writeValueAsString(meta))
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateWithJdbc(eq(testAnnouncementId), any(Announcements.class));
+        }
+
+        @Test
+        void testUpdateWithFile_NullMeta() throws Exception {
+                // Given - meta 為 null，只更新檔案
+                MockMultipartFile file = new MockMultipartFile(
+                                "file",
+                                "test.pdf",
+                                "application/pdf",
+                                "test content".getBytes());
+
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(file)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateWithJdbc(eq(testAnnouncementId), any(Announcements.class));
+        }
+
+        @Test
+        void testGetAnnouncementsByOffsetJdbc_WithPagination() throws Exception {
+                // Given - 測試有下一頁的情況
+                int offset = 8;
+                List<Announcements> announcements = Arrays.asList(testAnnouncement);
+                when(service.getAnnouncementsWithOffsetJdbc(offset)).thenReturn(announcements);
+                when(service.getTotalCount()).thenReturn(20L);
+
+                // When & Then
+                mockMvc.perform(get("/announcements/offset")
+                                .param("offset", String.valueOf(offset))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.offset", is(offset)))
+                                .andExpect(jsonPath("$.size", is(8)))
+                                .andExpect(jsonPath("$.totalElements", is(20)))
+                                .andExpect(jsonPath("$.totalPages", is(3)))
+                                .andExpect(jsonPath("$.hasNext", is(true)));
+
+                verify(service, times(1)).getAnnouncementsWithOffsetJdbc(offset);
+                verify(service, times(1)).getTotalCount();
+        }
+
+        @Test
+        void testGetAnnouncementsByOffsetJdbc_LastPage() throws Exception {
+                // Given - 測試最後一頁
+                int offset = 16;
+                List<Announcements> announcements = Arrays.asList(testAnnouncement);
+                when(service.getAnnouncementsWithOffsetJdbc(offset)).thenReturn(announcements);
+                when(service.getTotalCount()).thenReturn(20L);
+
+                // When & Then
+                mockMvc.perform(get("/announcements/offset")
+                                .param("offset", String.valueOf(offset))
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.hasNext", is(false)));
+
+                verify(service, times(1)).getAnnouncementsWithOffsetJdbc(offset);
+                verify(service, times(1)).getTotalCount();
+        }
+
+        @Test
+        void testGetSummary_EmptyList() throws Exception {
+                // Given - 空列表
+                when(service.getSummaryAll()).thenReturn(Arrays.asList());
+
+                // When & Then
+                mockMvc.perform(get("/announcements/summary")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(0)));
+
+                verify(service, times(1)).getSummaryAll();
+        }
+
+        @Test
+        void testGetAdminActiveBackend_EmptyList() throws Exception {
+                // Given - 空列表
+                when(service.getAdminActiveBackend()).thenReturn(Arrays.asList());
+
+                // When & Then
+                mockMvc.perform(get("/announcements/active/backend")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(0)));
+
+                verify(service, times(1)).getAdminActiveBackend();
+        }
+
+        @Test
+        void testGetAnnouncementsByOffsetJdbc_DefaultOffset() throws Exception {
+                // Given - 測試預設 offset = 0
+                List<Announcements> announcements = Arrays.asList(testAnnouncement);
+                when(service.getAnnouncementsWithOffsetJdbc(0)).thenReturn(announcements);
+                when(service.getTotalCount()).thenReturn(1L);
+
+                // When & Then - 不提供 offset 參數
+                mockMvc.perform(get("/announcements/offset")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.offset", is(0)));
+
+                verify(service, times(1)).getAnnouncementsWithOffsetJdbc(0);
+        }
+
+        @Test
+        void testUpload_NullOriginalFilename() throws Exception {
+                // Given - 檔案沒有原始檔名
+                MockMultipartFile file = new MockMultipartFile(
+                                "file",
+                                null, // null filename
+                                "application/pdf",
+                                "test content".getBytes());
+
+                Announcements meta = new Announcements();
+                meta.setTitle("測試");
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                when(service.createAnnouncementJdbc(any(Announcements.class))).thenReturn(testAnnouncement);
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/upload")
+                                .file(file)
+                                .file(metaPart)
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isCreated());
+
+                verify(service, times(1)).createAnnouncementJdbc(any(Announcements.class));
+        }
+
+        @Test
+        void testUpdateWithFile_NullOriginalFilename() throws Exception {
+                // Given - 更新檔案沒有原始檔名
+                MockMultipartFile file = new MockMultipartFile(
+                                "file",
+                                null, // null filename
+                                "application/pdf",
+                                "test content".getBytes());
+
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                // When & Then
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(file)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateWithJdbc(eq(testAnnouncementId), any(Announcements.class));
+        }
+
+        // ============================================================
+        // 提升分支覆蓋率的額外測試 - 針對未覆蓋分支
+        // ============================================================
+
+        @Test
+        void testUpdateWithFile_MetaWithTitle() throws Exception {
+                // 測試 meta.getTitle() 不為 null 的分支 (L163)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setTitle("新標題");
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+
+                verify(service).updateWithJdbc(eq(testAnnouncementId), any(Announcements.class));
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithContent() throws Exception {
+                // 測試 meta.getContent() 不為 null 的分支 (L164)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setContent("新內容");
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithType() throws Exception {
+                // 測試 meta.getType() 不為 null 的分支 (L165)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setType((byte) 2);
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithStartDate() throws Exception {
+                // 測試 meta.getStartDate() 不為 null 的分支 (L166)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setStartDate(LocalDate.now());
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithEndDate() throws Exception {
+                // 測試 meta.getEndDate() 不為 null 的分支 (L167)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setEndDate(LocalDate.now().plusDays(30));
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithStatus() throws Exception {
+                // 測試 meta.getStatus() 不為 null 的分支 (L168)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setStatus((byte) 2);
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithCreatedUser() throws Exception {
+                // 測試 meta.getCreatedUser() 不為 null 的分支 (L169)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setCreatedUser(UUID.randomUUID().toString());
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithUpdatedUser() throws Exception {
+                // 測試 meta.getUpdatedUser() 不為 null 的分支 (L171)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setUpdatedUser(UUID.randomUUID().toString());
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testUpdateWithFile_MetaWithAttachmentPath() throws Exception {
+                // 測試 meta.getAttachmentPath() 不為 null 的分支 (L174)
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+                when(service.updateWithJdbc(eq(testAnnouncementId), any(Announcements.class)))
+                                .thenReturn(testAnnouncement);
+
+                Announcements meta = new Announcements();
+                meta.setAttachmentPath("custom_path.pdf");
+
+                MockMultipartFile metaPart = new MockMultipartFile(
+                                "meta",
+                                "",
+                                "application/json",
+                                objectMapper.writeValueAsBytes(meta));
+
+                mockMvc.perform(multipart("/announcements/{id}", testAnnouncementId)
+                                .file(metaPart)
+                                .with(request -> {
+                                        request.setMethod("PUT");
+                                        return request;
+                                })
+                                .contentType(MediaType.MULTIPART_FORM_DATA))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testDownloadAttachment_FileNotFound() throws Exception {
+                // 測試文件不存在的情況 (L219)
+                testAnnouncement.setAttachmentPath("nonexistent_file.pdf");
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+
+                mockMvc.perform(get("/announcements/{id}/attachment", testAnnouncementId))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testDownloadAttachment_WithUnderscoreInFilename() throws Exception {
+                // 測試帶有底線的檔名解析 (L228-230)
+                // 由於實際文件系統操作較複雜,這個測試主要確保邏輯路徑被覆蓋
+                testAnnouncement.setAttachmentPath("uuid_test_file.pdf");
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+
+                // 這個測試會因為文件不存在而返回 404,但會覆蓋檔名處理的分支
+                mockMvc.perform(get("/announcements/{id}/attachment", testAnnouncementId))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void testDownloadAttachment_FileExists() throws Exception {
+                // 測試檔案存在時的成功下載情況 (L219 else 分支, L224, L229)
+                // 創建一個臨時測試檔案
+                String filename = UUID.randomUUID() + "_testfile.txt";
+                Path testFile = storageLocation.resolve(filename);
+                Files.write(testFile, "test content".getBytes());
+
+                try {
+                        testAnnouncement.setAttachmentPath(filename);
+                        when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+
+                        mockMvc.perform(get("/announcements/{id}/attachment", testAnnouncementId))
+                                        .andExpect(status().isOk())
+                                        .andExpect(header().exists("Content-Disposition"));
+                } finally {
+                        // 清理測試檔案
+                        Files.deleteIfExists(testFile);
+                }
+        }
+
+        @Test
+        void testDownloadAttachment_FileExistsNoUnderscore() throws Exception {
+                // 測試檔名沒有底線的情況 (L229 條件為 false)
+                String filename = "simplefile.txt";
+                Path testFile = storageLocation.resolve(filename);
+                Files.write(testFile, "test content".getBytes());
+
+                try {
+                        testAnnouncement.setAttachmentPath(filename);
+                        when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+
+                        mockMvc.perform(get("/announcements/{id}/attachment", testAnnouncementId))
+                                        .andExpect(status().isOk())
+                                        .andExpect(header().exists("Content-Disposition"));
+                } finally {
+                        Files.deleteIfExists(testFile);
+                }
+        }
+
+        @Test
+        void testDownloadAttachment_MalformedURL() throws Exception {
+                // 測試 MalformedURLException 的情況 (L248)
+                // 使用無效的檔案路徑來觸發異常
+                testAnnouncement.setAttachmentPath("../../../etc/passwd");
+                when(service.getById(testAnnouncementId)).thenReturn(Optional.of(testAnnouncement));
+
+                mockMvc.perform(get("/announcements/{id}/attachment", testAnnouncementId))
+                                .andExpect(status().isNotFound()); // 檔案不存在會返回 404
+        }
 }
+

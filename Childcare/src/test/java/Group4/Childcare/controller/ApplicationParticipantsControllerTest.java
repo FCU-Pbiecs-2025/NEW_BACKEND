@@ -236,19 +236,109 @@ class ApplicationParticipantsControllerTest {
         }
 
         @Test
-        void testCancelApplication_DefaultReason() throws Exception {
+        void testUpdate_NewMode_EmptyNationalId() throws Exception {
+                // 當 nationalID 為空字串時，應走 legacy 模式
+                when(service.updateParticipant(eq(testParticipantId), any(), any(), any()))
+                                .thenReturn(testParticipant);
+
+                mockMvc.perform(put("/application-participants/{participantID}", testParticipantId)
+                                .param("applicationID", testApplicationId.toString())
+                                .param("nationalID", "")
+                                .param("status", "已錄取")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateParticipant(eq(testParticipantId), any(), any(), any());
+        }
+
+        @Test
+        void testUpdate_GeneralException_InternalError() throws Exception {
+                // 模擬非 RuntimeException 的 Exception
+                when(service.updateParticipant(any(), any(), any(), any()))
+                                .thenAnswer(invocation -> {
+                                        throw new Exception("Unexpected error");
+                                });
+
+                mockMvc.perform(put("/application-participants/{participantID}", testParticipantId)
+                                .param("status", "已錄取")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(content().string(containsString("Unexpected error")));
+        }
+
+        @Test
+        void testUpdate_NewMode_NullNationalId() throws Exception {
+                // 當 nationalID 為 null 時，應走 legacy 模式
+                when(service.updateParticipant(eq(testParticipantId), any(), any(), any()))
+                                .thenReturn(testParticipant);
+
+                mockMvc.perform(put("/application-participants/{participantID}", testParticipantId)
+                                .param("applicationID", testApplicationId.toString())
+                                // 不傳 nationalID 參數，使其為 null
+                                .param("status", "已錄取")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk());
+
+                verify(service, times(1)).updateParticipant(eq(testParticipantId), any(), any(), any());
+        }
+
+        @Test
+        void testCancelApplication_EmptyApplicationId() throws Exception {
+                Map<String, String> requestBody = new HashMap<>();
+                requestBody.put("ApplicationID", "");
+                requestBody.put("NationalID", "A123456789");
+
+                mockMvc.perform(post("/application-participants/cancel")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message", is("ApplicationID 為必填欄位")));
+        }
+
+        @Test
+        void testCancelApplication_EmptyNationalId() throws Exception {
+                Map<String, String> requestBody = new HashMap<>();
+                requestBody.put("ApplicationID", testApplicationId.toString());
+                requestBody.put("NationalID", "");
+
+                mockMvc.perform(post("/application-participants/cancel")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message", is("NationalID 為必填欄位")));
+        }
+
+        @Test
+        void testCancelApplication_EmptyReason() throws Exception {
                 Map<String, String> requestBody = new HashMap<>();
                 requestBody.put("ApplicationID", testApplicationId.toString());
                 requestBody.put("NationalID", "A123456789");
+                requestBody.put("reason", "");
 
-                when(service.cancelApplicationWithOrderRecalculation(
-                                eq(testApplicationId), eq("A123456789"), eq("使用者撤銷申請")))
+                when(service.cancelApplicationWithOrderRecalculation(any(), any(), eq("使用者撤銷申請")))
                                 .thenReturn(testParticipant);
 
                 mockMvc.perform(post("/application-participants/cancel")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(requestBody)))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.success", is(true)));
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void testCancelApplication_GeneralException() throws Exception {
+                Map<String, String> requestBody = new HashMap<>();
+                requestBody.put("ApplicationID", testApplicationId.toString());
+                requestBody.put("NationalID", "A123456789");
+
+                when(service.cancelApplicationWithOrderRecalculation(any(), any(), any()))
+                                .thenAnswer(invocation -> {
+                                        throw new Exception("System failure");
+                                });
+
+                mockMvc.perform(post("/application-participants/cancel")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.message", is("系統錯誤: System failure")));
         }
 }

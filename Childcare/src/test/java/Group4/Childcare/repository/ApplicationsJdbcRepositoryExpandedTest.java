@@ -289,16 +289,39 @@ public class ApplicationsJdbcRepositoryExpandedTest {
                 when(rs.getLong("CaseNumber")).thenReturn(500L);
                 when(rs.getObject("CurrentOrder")).thenReturn(3);
                 when(rs.getObject("IdentityType")).thenReturn(1);
+                when(rs.getDate("ApplicationDate")).thenReturn(java.sql.Date.valueOf("2024-01-01"));
+                when(rs.getDate("BirthDate")).thenReturn(java.sql.Date.valueOf("2020-01-01"));
 
                 ArgumentCaptor<RowMapper<CaseOffsetListDTO>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
                 repository.findCaseListWithOffset(0, 10, null, null, null, null, null, null, null);
 
                 verify(jdbcTemplate).query(anyString(), (Object[]) any(Object[].class), mapperCaptor.capture());
-                CaseOffsetListDTO result = mapperCaptor.getValue().mapRow(rs, 1);
+                RowMapper<CaseOffsetListDTO> mapper = mapperCaptor.getValue();
+                CaseOffsetListDTO result = mapper.mapRow(rs, 1);
 
                 assertEquals(500L, result.getCaseNumber());
                 assertEquals(3, result.getCurrentOrder());
                 assertEquals("1", result.getIdentityType());
+
+                // Test null branches
+                when(rs.getObject("ParticipantID")).thenReturn(null);
+                when(rs.getDate("ApplicationDate")).thenReturn(null);
+                when(rs.getDate("BirthDate")).thenReturn(null);
+                when(rs.getObject("CurrentOrder")).thenReturn(null);
+                when(rs.getObject("IdentityType")).thenReturn(null);
+                
+                result = mapper.mapRow(rs, 2);
+                assertNull(result.getParticipantID());
+                assertNull(result.getApplicationDate());
+                assertNull(result.getChildBirthDate());
+                assertNull(result.getCurrentOrder());
+                assertNull(result.getIdentityType());
+
+                // Test ParticipantID as String
+                when(rs.getObject("ParticipantID")).thenReturn(appId.toString());
+                when(rs.getString("ParticipantID")).thenReturn(appId.toString());
+                result = mapper.mapRow(rs, 3);
+                assertEquals(appId, result.getParticipantID());
         }
 
         @Test
@@ -314,5 +337,302 @@ public class ApplicationsJdbcRepositoryExpandedTest {
                                 .thenThrow(new RuntimeException("Fail"));
                 rows = repository.updateAttachmentPaths(appId, "a", "b", "c", "d");
                 assertEquals(0, rows);
+        }
+
+        // ===========================================================================================
+        // 6. Additional Methods for Coverage
+        // ===========================================================================================
+
+        @Test
+        void testGetApplicationById_RowMapperBranches() throws SQLException {
+                ResultSet rs = mock(ResultSet.class);
+                when(rs.getString("ApplicationID")).thenReturn(appId.toString());
+                when(rs.getDate("ApplicationDate")).thenReturn(null); // Branch: null date
+                when(rs.getString("InstitutionID")).thenReturn(null); // Branch: null inst
+                when(rs.getString("UserID")).thenReturn(null); // Branch: null user
+                when(rs.getByte("IdentityType")).thenReturn((byte) 1);
+                when(rs.getString("AttachmentPath")).thenReturn("path");
+
+                ArgumentCaptor<RowMapper<Applications>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+                repository.getApplicationById(appId);
+
+                verify(jdbcTemplate).query(anyString(), mapperCaptor.capture(), eq(appId.toString()));
+                Applications result = mapperCaptor.getValue().mapRow(rs, 1);
+
+                assertNull(result.getApplicationDate());
+                assertNull(result.getInstitutionID());
+                assertNull(result.getUserID());
+        }
+
+        @Test
+        void testFindSummaryByUserID_Mapper() throws SQLException {
+                ResultSet rs = mock(ResultSet.class);
+                when(rs.getString("ApplicationID")).thenReturn(appId.toString());
+                when(rs.getDate("ApplicationDate")).thenReturn(java.sql.Date.valueOf("2024-01-01"));
+                when(rs.getString("Status")).thenReturn("Pending");
+                when(rs.getString("Reason")).thenReturn("None");
+
+                ArgumentCaptor<RowMapper<Group4.Childcare.DTO.ApplicationSummaryDTO>> mapperCaptor = ArgumentCaptor
+                                .forClass(RowMapper.class);
+                repository.findSummaryByUserID(userId);
+
+                verify(jdbcTemplate).query(anyString(), mapperCaptor.capture(), eq(userId.toString()));
+                Group4.Childcare.DTO.ApplicationSummaryDTO result = mapperCaptor.getValue().mapRow(rs, 1);
+
+                assertEquals(appId, result.getApplicationID());
+                assertEquals("Pending", result.getStatus());
+        }
+
+        @Test
+        void testFindByNationalID_Mapper() throws SQLException {
+                ResultSet rs = mock(ResultSet.class);
+                when(rs.getObject("CaseNumber")).thenReturn(123L);
+                when(rs.getDate("ApplicationDate")).thenReturn(null);
+                when(rs.getObject("IdentityType")).thenReturn(null);
+                when(rs.getString("InstitutionID")).thenReturn(instId.toString());
+                when(rs.getString("ApplicationID")).thenReturn(appId.toString());
+                when(rs.getString("UserID")).thenReturn(userId.toString());
+                when(rs.getString("InstitutionName")).thenReturn("Inst");
+                when(rs.getString("Status")).thenReturn("S");
+                when(rs.getInt("CurrentOrder")).thenReturn(1);
+                when(rs.getTimestamp("ReviewDate")).thenReturn(null);
+                when(rs.getString("ClassName")).thenReturn("C");
+                when(rs.getString("ParticipantID")).thenReturn(UUID.randomUUID().toString());
+                when(rs.getString("Name")).thenReturn("N");
+                when(rs.getBoolean("Gender")).thenReturn(true);
+                when(rs.getDate("BirthDate")).thenReturn(null);
+                when(rs.getString("MailingAddress")).thenReturn("A");
+                when(rs.getString("Email")).thenReturn("E");
+                when(rs.getString("PhoneNumber")).thenReturn("P");
+                when(rs.getString("ParticipantNationalID")).thenReturn("PNID");
+                when(rs.getString("ApplicantName")).thenReturn("AN");
+
+                ArgumentCaptor<RowMapper<CaseEditUpdateDTO>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+                repository.findByNationalID("NID");
+
+                verify(jdbcTemplate).query(anyString(), mapperCaptor.capture(), eq("NID"));
+                CaseEditUpdateDTO result = mapperCaptor.getValue().mapRow(rs, 1);
+
+                assertEquals(123L, result.getCaseNumber());
+                assertNull(result.getApplyDate());
+                assertNull(result.getIdentityType());
+        }
+
+        @Test
+        void testFindUserApplicationDetails_Mapper() throws SQLException {
+                ResultSet rs = mock(ResultSet.class);
+                when(rs.getString("ApplicationID")).thenReturn(appId.toString());
+                when(rs.getDate("ApplicationDate")).thenReturn(java.sql.Date.valueOf("2024-01-01"));
+                when(rs.getString("InstitutionID")).thenReturn(instId.toString());
+                when(rs.getString("InstitutionName")).thenReturn("Inst");
+                when(rs.getString("childname")).thenReturn("Child");
+                when(rs.getDate("BirthDate")).thenReturn(null);
+                when(rs.getString("CaseNumber")).thenReturn("CN");
+                when(rs.getString("Status")).thenReturn("S");
+                when(rs.getInt("CurrentOrder")).thenReturn(1);
+                when(rs.getString("childNationalID")).thenReturn("CNID");
+                when(rs.getString("Reason")).thenReturn("R");
+                when(rs.getString("CancellationID")).thenReturn(null);
+                when(rs.getString("username")).thenReturn("User");
+
+                ArgumentCaptor<RowMapper<Group4.Childcare.DTO.UserApplicationDetailsDTO>> mapperCaptor = ArgumentCaptor
+                                .forClass(RowMapper.class);
+                repository.findUserApplicationDetails(userId);
+
+                verify(jdbcTemplate).query(anyString(), mapperCaptor.capture(), eq(userId.toString()));
+                Group4.Childcare.DTO.UserApplicationDetailsDTO result = mapperCaptor.getValue().mapRow(rs, 1);
+
+                assertEquals(appId, result.getApplicationID());
+                assertNull(result.getBirthDate());
+                assertNull(result.getCancellationID());
+        }
+
+        @Test
+        void testFindApplicationCaseByParticipantId_Mapper() throws SQLException {
+                ResultSet rs = mock(ResultSet.class);
+                UUID pId = UUID.randomUUID();
+
+                // Header fields
+                when(rs.getString("ApplicationID")).thenReturn(appId.toString());
+                when(rs.getDate("ApplicationDate")).thenReturn(java.sql.Date.valueOf("2024-01-01"));
+                when(rs.getString("InstitutionName")).thenReturn("Inst");
+                when(rs.getObject("IdentityType")).thenReturn((byte) 1);
+                when(rs.getObject("CaseNumber")).thenReturn(12345L);
+                when(rs.getString("AttachmentPath")).thenReturn("p");
+                when(rs.getString("AttachmentPath1")).thenReturn("p1");
+                when(rs.getString("AttachmentPath2")).thenReturn("p2");
+                when(rs.getString("AttachmentPath3")).thenReturn("p3");
+
+                // Participant fields
+                when(rs.getString("NationalID")).thenReturn("NID");
+                when(rs.getObject("ParticipantType")).thenReturn(2); // Parent
+                when(rs.getInt("ParticipantType")).thenReturn(2);
+                when(rs.getString("ParticipantID")).thenReturn(pId.toString());
+                when(rs.getString("Name")).thenReturn("Name");
+                when(rs.getObject("Gender")).thenReturn(true);
+                when(rs.getBoolean("Gender")).thenReturn(true);
+                when(rs.getString("RelationShip")).thenReturn("Rel");
+                when(rs.getString("Occupation")).thenReturn("Occ");
+                when(rs.getString("PhoneNumber")).thenReturn("Phone");
+                when(rs.getString("HouseholdAddress")).thenReturn("HAddr");
+                when(rs.getString("MailingAddress")).thenReturn("MAddr");
+                when(rs.getString("Email")).thenReturn("Email");
+                when(rs.getDate("BirthDate")).thenReturn(java.sql.Date.valueOf("2020-01-01"));
+                when(rs.getObject("IsSuspended")).thenReturn(false);
+                when(rs.getBoolean("IsSuspended")).thenReturn(false);
+                when(rs.getDate("SuspendEnd")).thenReturn(java.sql.Date.valueOf("2024-12-31"));
+                when(rs.getObject("CurrentOrder")).thenReturn(1);
+                when(rs.getInt("CurrentOrder")).thenReturn(1);
+                when(rs.getString("Status")).thenReturn("S");
+                when(rs.getString("Reason")).thenReturn("R");
+                when(rs.getString("ClassID")).thenReturn("C");
+                when(rs.getTimestamp("ReviewDate")).thenReturn(new java.sql.Timestamp(System.currentTimeMillis()));
+
+                ArgumentCaptor<RowMapper<ApplicationCaseDTO>> mapperCaptor = ArgumentCaptor.forClass(RowMapper.class);
+                repository.findApplicationCaseByParticipantId(pId);
+
+                verify(jdbcTemplate).query(anyString(), mapperCaptor.capture(), eq(pId.toString()));
+                RowMapper<ApplicationCaseDTO> mapper = mapperCaptor.getValue();
+
+                // First row (header + parent)
+                mapper.mapRow(rs, 1);
+
+                // Second row (child)
+                when(rs.getObject("ParticipantType")).thenReturn(0);
+                when(rs.getInt("ParticipantType")).thenReturn(0);
+                mapper.mapRow(rs, 2);
+
+                // Test null branches and different types
+                when(rs.getString("ApplicationID")).thenReturn(null);
+                when(rs.getDate("ApplicationDate")).thenReturn(null);
+                when(rs.getObject("IdentityType")).thenReturn(null);
+                when(rs.getObject("CaseNumber")).thenReturn(null);
+                when(rs.getString("NationalID")).thenReturn(null);
+                mapper.mapRow(rs, 3); // Should skip participant part
+
+                when(rs.getString("NationalID")).thenReturn("NID2");
+                when(rs.getObject("ParticipantType")).thenReturn(true); // Boolean type
+                when(rs.getBoolean("ParticipantType")).thenReturn(true);
+                when(rs.getString("ParticipantID")).thenReturn(""); // Empty string
+                when(rs.getObject("Gender")).thenReturn(null);
+                when(rs.getDate("BirthDate")).thenReturn(null);
+                when(rs.getObject("IsSuspended")).thenReturn(null);
+                when(rs.getDate("SuspendEnd")).thenReturn(null);
+                when(rs.getObject("CurrentOrder")).thenReturn(null);
+                when(rs.getTimestamp("ReviewDate")).thenReturn(null);
+                mapper.mapRow(rs, 4);
+
+                // Test exceptions in header mapping
+                when(rs.getObject("IdentityType")).thenThrow(new RuntimeException());
+                when(rs.getObject("CaseNumber")).thenThrow(new RuntimeException());
+                when(rs.getString("AttachmentPath")).thenThrow(new RuntimeException());
+                mapper.mapRow(rs, 5);
+        }
+
+        @Test
+        void testCountMethods_NullBranches() {
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), anyString()))
+                                .thenReturn(null);
+                assertEquals(0, repository.countAcceptedApplicationsByChildNationalID("NID"));
+
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString()))
+                                .thenReturn(null);
+                assertEquals(0, repository.countPendingApplicationsByChildNationalID("NID"));
+
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString(), anyString(), anyString()))
+                                .thenReturn(null);
+                assertEquals(0, repository.countActiveApplicationsByChildAndInstitution("NID", instId));
+
+                when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5L);
+                assertEquals(5L, repository.countCaseNumberWithDateFormat());
+        }
+
+        @Test
+        void testCountAcceptedApplications_NonNullResult() {
+                // Test when queryForObject returns a non-null value
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), anyString()))
+                                .thenReturn(3);
+                assertEquals(3, repository.countAcceptedApplicationsByChildNationalID("A123456789"));
+                verify(jdbcTemplate).queryForObject(anyString(), eq(Integer.class), eq("A123456789"), eq("已錄取"));
+        }
+
+        @Test
+        void testCountPendingApplications_NonNullResult() {
+                // Test when queryForObject returns a non-null value
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString()))
+                                .thenReturn(2);
+                assertEquals(2, repository.countPendingApplicationsByChildNationalID("B987654321"));
+                verify(jdbcTemplate).queryForObject(anyString(), eq(Integer.class), eq("B987654321"),
+                                eq("審核中"), eq("需要補件"), eq("候補中"), eq("撤銷申請審核中"));
+        }
+
+        @Test
+        void testCountActiveApplicationsByChildAndInstitution_NonNullResult() {
+                // Test when queryForObject returns a non-null value
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString(), anyString(), anyString()))
+                                .thenReturn(1);
+                assertEquals(1, repository.countActiveApplicationsByChildAndInstitution("C123456789", instId));
+                verify(jdbcTemplate).queryForObject(anyString(), eq(Integer.class), eq("C123456789"),
+                                eq(instId.toString()), eq("審核中"), eq("需要補件"), eq("候補中"),
+                                eq("撤銷申請審核中"), eq("已錄取"));
+        }
+
+        @Test
+        void testCountActiveApplicationsByChildAndInstitution_NullInstitutionId() {
+                // Test when institutionId is null - the ternary operator branch
+                when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), anyString(), isNull(), anyString(),
+                                anyString(), anyString(), anyString(), anyString()))
+                                .thenReturn(2);
+                assertEquals(2, repository.countActiveApplicationsByChildAndInstitution("D123456789", null));
+                verify(jdbcTemplate).queryForObject(anyString(), eq(Integer.class), eq("D123456789"),
+                                isNull(), eq("審核中"), eq("需要補件"), eq("候補中"),
+                                eq("撤銷申請審核中"), eq("已錄取"));
+        }
+
+        @Test
+        void testCountCaseNumberWithDateFormat_NullResult() {
+                // Test when queryForObject returns null
+                when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(null);
+                assertEquals(0L, repository.countCaseNumberWithDateFormat());
+        }
+
+        @Test
+        void testCountCaseNumberWithDateFormat_NonNullResult() {
+                // Test when queryForObject returns a non-null value
+                when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+                assertEquals(10L, repository.countCaseNumberWithDateFormat());
+        }
+
+        @Test
+        void testUpdateAttachmentPaths_Success() {
+                // Test successful update
+                when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any())).thenReturn(1);
+                int result = repository.updateAttachmentPaths(appId, "path0", "path1", "path2", "path3");
+                assertEquals(1, result);
+                verify(jdbcTemplate).update(anyString(), eq("path0"), eq("path1"), eq("path2"),
+                                eq("path3"), eq(appId.toString()));
+        }
+
+        @Test
+        void testUpdateAttachmentPaths_NullApplicationId() {
+                // Test with null applicationId - tests the ternary operator
+                when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), isNull())).thenReturn(1);
+                int result = repository.updateAttachmentPaths(null, "path0", "path1", "path2", "path3");
+                assertEquals(1, result);
+                verify(jdbcTemplate).update(anyString(), eq("path0"), eq("path1"), eq("path2"),
+                                eq("path3"), isNull());
+        }
+
+        @Test
+        void testUpdateAttachmentPaths_ExceptionHandling() {
+                // Test exception handling - should return 0 when exception occurs
+                when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any()))
+                                .thenThrow(new RuntimeException("Database error"));
+                int result = repository.updateAttachmentPaths(appId, "path0", "path1", "path2", "path3");
+                assertEquals(0, result);
         }
 }
