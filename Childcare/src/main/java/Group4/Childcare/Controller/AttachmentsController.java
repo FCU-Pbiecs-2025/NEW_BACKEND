@@ -26,7 +26,7 @@ public class AttachmentsController {
     @Autowired
     private ApplicationsJdbcRepository applicationsJdbcRepository;
 
-    private final String ATTACHMENT_DIR = "AttachmentResource";
+   private String ATTACHMENT_DIR = "AttachmentResource";
 
     @PostMapping("/applications/{id}/attachments")
     public ResponseEntity<?> uploadAttachments(

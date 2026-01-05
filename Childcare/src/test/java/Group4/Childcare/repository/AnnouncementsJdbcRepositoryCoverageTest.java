@@ -271,9 +271,13 @@ class AnnouncementsJdbcRepositoryCoverageTest {
         // When
         Announcements result = repository.save(announcement);
 
-        // Then
+        // Then - ID should be the last parameter in UPDATE query (WHERE clause)
         assertEquals(testId, result.getAnnouncementID());
-        verify(jdbcTemplate).update(contains("UPDATE"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(jdbcTemplate).update(
+            contains("UPDATE"),
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),  // 11 parameters before ID
+            eq(testId.toString())  // 12th parameter - ID in WHERE clause
+        );
     }
 
     // ===========================================================================================
@@ -283,6 +287,7 @@ class AnnouncementsJdbcRepositoryCoverageTest {
     @Test
     void testInsert_WithNonNullId() {
         // 測試 announcement.getAnnouncementID() != null ? ... : null (true 分支)
+        // 注意: 當ID非null時，save()會呼叫update()，而update()的ID是最後一個參數(WHERE子句)
         Announcements announcement = new Announcements();
         announcement.setAnnouncementID(testId);  // non-null
         announcement.setTitle("Test");
@@ -296,8 +301,12 @@ class AnnouncementsJdbcRepositoryCoverageTest {
         // When
         repository.save(announcement);
 
-        // Then - verify the ID was converted to string
-        verify(jdbcTemplate).update(anyString(), eq(testId.toString()), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        // Then - verify the ID was converted to string and is the LAST parameter (UPDATE query)
+        verify(jdbcTemplate).update(
+            contains("UPDATE"),
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),  // 11 parameters before ID
+            eq(testId.toString())  // 12th parameter - ID in WHERE clause
+        );
     }
 
     @Test
@@ -338,7 +347,11 @@ class AnnouncementsJdbcRepositoryCoverageTest {
         repository.save(announcement);
 
         // Then
-        verify(jdbcTemplate).update(contains("UPDATE"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(testId.toString()));
+        verify(jdbcTemplate).update(
+            contains("UPDATE"),
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),  // 11 parameters before ID
+            eq(testId.toString())  // 12th parameter - ID in WHERE clause
+        );
     }
 
     // ===========================================================================================

@@ -192,6 +192,18 @@ class AttachmentsControllerCoverageTest {
 
         // 使用一個不存在的目錄
         Path newDir = tempDir.resolve("new-dir");
+        // 確保父目錄存在但新目錄不存在
+        Files.createDirectories(tempDir);
+        if (Files.exists(newDir)) {
+            Files.walk(newDir)
+                    .sorted((a, b) -> -a.compareTo(b))
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException ignored) {
+                        }
+                    });
+        }
         ReflectionTestUtils.setField(controller, "ATTACHMENT_DIR", newDir.toString());
 
         MockMultipartFile file = new MockMultipartFile(
@@ -203,7 +215,7 @@ class AttachmentsControllerCoverageTest {
         ResponseEntity<?> response = controller.uploadAttachments(testApplicationId, file, null, null, null);
 
         // 驗證目錄被創建
-        assertTrue(Files.exists(newDir));
+        assertTrue(Files.exists(newDir), "New directory should have been created");
         assertEquals(200, response.getStatusCodeValue());
 
         cleanupTestFiles();
